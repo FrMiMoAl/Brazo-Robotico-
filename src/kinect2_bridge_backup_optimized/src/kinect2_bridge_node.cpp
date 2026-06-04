@@ -1,0 +1,337 @@
+#include <rclcpp/rclcpp.hpp>
+#include <sensor_msgs/msg/image.hpp>
+#include <sensor_msgs/msg/camera_info.hpp>
+#include <image_transport/image_transport.hpp>
+#include <cv_bridge/cv_bridge.h>
+
+#include <libfreenect2/libfreenect2.hpp>
+#include <libfreenect2/frame_listener_impl.h>
+#include <libfreenect2/registration.h>
+#include <libfreenect2/packet_pipeline.h>
+
+#include <opencv2/imgproc.hpp>
+
+#include <atomic>
+#include <thread>
+#include <memory>
+
+// Phase 2: two independent SyncMultiFrameListeners + two threads.
+//
+//   listener_color_    ──► colorLoop()    (Color only)
+//   listener_depth_ir_ ──► depthIrLoop()  (Depth + IR)
+//
+// Before this split a single combined listener was blocked by the TurboJPEG
+// color decode (~36 ms) and serialised depth/IR at ~13-15 Hz.
+// After the split, depth/IR runs fully independently at ~25-30 Hz.
+
+class Kinect2Bridge : public rclcpp::Node
+{
+public:
+  Kinect2Bridge()
+  : Node("kinect2_bridge"), running_(false), dev_(nullptr), pipeline_(nullptr)
+  {
+    // ── Parameters ───────────────────────────────────────────────────────────
+    declare_parameter<std::string>("pipeline",              "opengl");
+    declare_parameter<bool>       ("publish_color",         true);
+    declare_parameter<bool>       ("publish_depth",         true);
+    declare_parameter<bool>       ("publish_ir",            true);
+    declare_parameter<bool>       ("publish_resized_color", false);
+    declare_parameter<int>        ("resized_width",         640);
+    declare_parameter<int>        ("resized_height",        360);
+    declare_parameter<std::string>("color_frame_id", "kinect2_color_optical_frame");
+    declare_parameter<std::string>("depth_frame_id", "kinect2_depth_optical_frame");
+    declare_parameter<std::string>("ir_frame_id",    "kinect2_ir_optical_frame");
+    declare_parameter<int>        ("timeout_ms",            1000);
+
+    pub_color_         = get_parameter("publish_color").as_bool();
+    pub_depth_         = get_parameter("publish_depth").as_bool();
+    pub_ir_            = get_parameter("publish_ir").as_bool();
+    pub_resized_color_ = get_parameter("publish_resized_color").as_bool();
+    resized_width_     = get_parameter("resized_width").as_int();
+    resized_height_    = get_parameter("resized_height").as_int();
+    color_frame_id_    = get_parameter("color_frame_id").as_string();
+    depth_frame_id_    = get_parameter("depth_frame_id").as_string();
+    ir_frame_id_       = get_parameter("ir_frame_id").as_string();
+    timeout_ms_        = get_parameter("timeout_ms").as_int();
+
+    // ── Publishers ───────────────────────────────────────────────────────────
+    // SensorDataQoS: best_effort + volatile + keep_last(5)
+    // Subscribers must use best_effort or sensor_data QoS profile.
+    // rqt_image_view and rviz2 use sensor_data by default — no extra config needed.
+    const auto qos     = rclcpp::SensorDataQoS();
+    const auto qos_rmw = qos.get_rmw_qos_profile();
+
+    if (pub_color_) {
+      color_pub_      = image_transport::create_publisher(this, "kinect2/color/image_raw", qos_rmw);
+      color_info_pub_ = create_publisher<sensor_msgs::msg::CameraInfo>(
+                          "kinect2/color/camera_info", qos);
+    }
+    if (pub_depth_) {
+      depth_pub_      = image_transport::create_publisher(this, "kinect2/depth/image_raw", qos_rmw);
+      depth_info_pub_ = create_publisher<sensor_msgs::msg::CameraInfo>(
+                          "kinect2/depth/camera_info", qos);
+    }
+    if (pub_ir_) {
+      ir_pub_      = image_transport::create_publisher(this, "kinect2/ir/image_raw", qos_rmw);
+      ir_info_pub_ = create_publisher<sensor_msgs::msg::CameraInfo>(
+                       "kinect2/ir/camera_info", qos);
+    }
+    if (pub_resized_color_) {
+      resized_pub_ = image_transport::create_publisher(
+                       this, "kinect2/color/image_resized", qos_rmw);
+    }
+
+    if (!initKinect()) {
+      RCLCPP_FATAL(get_logger(),
+        "Fallo la inicializacion de Kinect v2. Revisa la conexion USB 3.0 y permisos udev.");
+      return;
+    }
+
+    running_ = true;
+    if (pub_color_ || pub_resized_color_) {
+      color_thread_ = std::thread(&Kinect2Bridge::colorLoop, this);
+    }
+    if (pub_depth_ || pub_ir_) {
+      depth_ir_thread_ = std::thread(&Kinect2Bridge::depthIrLoop, this);
+    }
+    RCLCPP_INFO(get_logger(), "Kinect2Bridge listo — publicando en /kinect2/");
+  }
+
+  ~Kinect2Bridge()
+  {
+    running_ = false;
+    // Each thread exits once its waitForNewFrame times out (at most timeout_ms_)
+    if (color_thread_.joinable())    color_thread_.join();
+    if (depth_ir_thread_.joinable()) depth_ir_thread_.join();
+
+    if (dev_) {
+      dev_->stop();
+      dev_->close();
+    }
+    // listener_color_, listener_depth_ir_, registration_ freed by unique_ptr
+    // pipeline_ is owned by dev_ after openDevice(); do NOT delete here
+  }
+
+private:
+  // ── Kinect init ──────────────────────────────────────────────────────────
+
+  libfreenect2::PacketPipeline * createPipeline()
+  {
+    const std::string name = get_parameter("pipeline").as_string();
+    if (name == "cpu") {
+      RCLCPP_INFO(get_logger(), "Pipeline: CpuPacketPipeline");
+      return new libfreenect2::CpuPacketPipeline();
+    }
+    // Default: OpenGL — uses Jetson GPU for depth decode (~7-9 ms vs ~200 ms CPU)
+    RCLCPP_INFO(get_logger(), "Pipeline: OpenGLPacketPipeline");
+    return new libfreenect2::OpenGLPacketPipeline();
+  }
+
+  bool initKinect()
+  {
+    if (freenect2_.enumerateDevices() == 0) {
+      RCLCPP_ERROR(get_logger(), "No se encontro ningun dispositivo Kinect v2");
+      return false;
+    }
+    const std::string serial = freenect2_.getDefaultDeviceSerialNumber();
+    RCLCPP_INFO(get_logger(), "Abriendo Kinect v2, serial: %s", serial.c_str());
+
+    pipeline_ = createPipeline();
+    dev_ = freenect2_.openDevice(serial, pipeline_);
+    if (!dev_) {
+      RCLCPP_ERROR(get_logger(), "No se pudo abrir el dispositivo Kinect v2");
+      return false;
+    }
+
+    // Separate listener for color (runs independently from depth/IR)
+    if (pub_color_ || pub_resized_color_) {
+      listener_color_ = std::make_unique<libfreenect2::SyncMultiFrameListener>(
+        libfreenect2::Frame::Color);
+      dev_->setColorFrameListener(listener_color_.get());
+    }
+
+    // Separate listener for depth and/or IR
+    {
+      int types = 0;
+      if (pub_depth_) types |= libfreenect2::Frame::Depth;
+      if (pub_ir_)   types |= libfreenect2::Frame::Ir;
+      if (types) {
+        listener_depth_ir_ = std::make_unique<libfreenect2::SyncMultiFrameListener>(types);
+        dev_->setIrAndDepthFrameListener(listener_depth_ir_.get());
+      }
+    }
+
+    if (!dev_->start()) {
+      RCLCPP_ERROR(get_logger(), "No se pudo iniciar el streaming de Kinect v2");
+      return false;
+    }
+    RCLCPP_INFO(get_logger(), "Kinect v2 en linea. Firmware: %s",
+      dev_->getFirmwareVersion().c_str());
+
+    registration_ = std::make_unique<libfreenect2::Registration>(
+      dev_->getIrCameraParams(), dev_->getColorCameraParams());
+
+    // Build CameraInfo messages once; only the stamp is updated each frame
+    buildCachedCameraInfo();
+    return true;
+  }
+
+  void buildCachedCameraInfo()
+  {
+    {
+      const auto p = dev_->getColorCameraParams();
+      color_info_.header.frame_id  = color_frame_id_;
+      color_info_.width            = 1920;
+      color_info_.height           = 1080;
+      color_info_.distortion_model = "plumb_bob";
+      color_info_.d = {0.0, 0.0, 0.0, 0.0, 0.0};
+      color_info_.k = {p.fx, 0.0, p.cx,  0.0, p.fy, p.cy,  0.0, 0.0, 1.0};
+      color_info_.r = {1.0, 0.0, 0.0,  0.0, 1.0, 0.0,  0.0, 0.0, 1.0};
+      color_info_.p = {p.fx, 0.0, p.cx, 0.0,  0.0, p.fy, p.cy, 0.0,  0.0, 0.0, 1.0, 0.0};
+    }
+    {
+      const auto p = dev_->getIrCameraParams();
+      depth_info_.header.frame_id  = depth_frame_id_;
+      depth_info_.width            = 512;
+      depth_info_.height           = 424;
+      depth_info_.distortion_model = "plumb_bob";
+      depth_info_.d = {p.k1, p.k2, p.p1, p.p2, p.k3};
+      depth_info_.k = {p.fx, 0.0, p.cx,  0.0, p.fy, p.cy,  0.0, 0.0, 1.0};
+      depth_info_.r = {1.0, 0.0, 0.0,  0.0, 1.0, 0.0,  0.0, 0.0, 1.0};
+      depth_info_.p = {p.fx, 0.0, p.cx, 0.0,  0.0, p.fy, p.cy, 0.0,  0.0, 0.0, 1.0, 0.0};
+
+      // IR shares intrinsics with depth but has its own frame_id
+      ir_info_                 = depth_info_;
+      ir_info_.header.frame_id = ir_frame_id_;
+    }
+  }
+
+  // ── Color thread ─────────────────────────────────────────────────────────
+  // Runs at the natural color rate (~27 Hz max, limited by TurboJPEG decode).
+  // Does NOT block depth/IR.
+  void colorLoop()
+  {
+    libfreenect2::FrameMap frames;
+    while (running_ && rclcpp::ok()) {
+      if (!listener_color_->waitForNewFrame(frames, timeout_ms_)) {
+        RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 5000,
+          "Timeout esperando frame de color (%d ms)", timeout_ms_);
+        continue;
+      }
+
+      const rclcpp::Time now = get_clock()->now();
+      auto * color = frames[libfreenect2::Frame::Color];
+      if (color) {
+        std_msgs::msg::Header hdr;
+        hdr.stamp    = now;
+        hdr.frame_id = color_frame_id_;
+
+        // BGRX (libfreenect2 native format) → BGR
+        cv::Mat bgrx(color->height, color->width, CV_8UC4, color->data);
+        cv::Mat bgr;
+        cv::cvtColor(bgrx, bgr, cv::COLOR_BGRA2BGR);
+
+        if (pub_color_) {
+          color_pub_.publish(cv_bridge::CvImage(hdr, "bgr8", bgr).toImageMsg());
+          color_info_.header.stamp = now;
+          color_info_pub_->publish(color_info_);
+        }
+        if (pub_resized_color_) {
+          cv::Mat small;
+          cv::resize(bgr, small,
+            cv::Size(resized_width_, resized_height_), 0, 0, cv::INTER_LINEAR);
+          resized_pub_.publish(cv_bridge::CvImage(hdr, "bgr8", small).toImageMsg());
+        }
+      }
+      listener_color_->release(frames);
+    }
+    RCLCPP_INFO(get_logger(), "colorLoop terminado.");
+  }
+
+  // ── Depth + IR thread ────────────────────────────────────────────────────
+  // Runs at ~25-30 Hz, fully independent of color JPEG decode.
+  void depthIrLoop()
+  {
+    libfreenect2::FrameMap frames;
+    while (running_ && rclcpp::ok()) {
+      if (!listener_depth_ir_->waitForNewFrame(frames, timeout_ms_)) {
+        RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 5000,
+          "Timeout esperando frame de depth/IR (%d ms)", timeout_ms_);
+        continue;
+      }
+
+      const rclcpp::Time now = get_clock()->now();
+
+      if (pub_depth_) {
+        auto * depth = frames[libfreenect2::Frame::Depth];
+        if (depth) {
+          std_msgs::msg::Header hdr;
+          hdr.stamp    = now;
+          hdr.frame_id = depth_frame_id_;
+
+          // mm (float) → m (float). convertTo with scale avoids a temporary Mat.
+          // Published as 32FC1. Do NOT open /kinect2/depth/image_raw/compressed —
+          // JPEG requires 8/16-bit input. Use compressedDepth transport for depth.
+          cv::Mat depth_mm(depth->height, depth->width, CV_32FC1, depth->data);
+          cv::Mat depth_m;
+          depth_mm.convertTo(depth_m, CV_32FC1, 0.001);
+
+          depth_pub_.publish(cv_bridge::CvImage(hdr, "32FC1", depth_m).toImageMsg());
+          depth_info_.header.stamp = now;
+          depth_info_pub_->publish(depth_info_);
+        }
+      }
+
+      if (pub_ir_) {
+        auto * ir = frames[libfreenect2::Frame::Ir];
+        if (ir) {
+          std_msgs::msg::Header hdr;
+          hdr.stamp    = now;
+          hdr.frame_id = ir_frame_id_;  // kinect2_ir_optical_frame
+
+          cv::Mat ir_f(ir->height, ir->width, CV_32FC1, ir->data);
+          cv::Mat ir_16;
+          ir_f.convertTo(ir_16, CV_16UC1);
+
+          ir_pub_.publish(cv_bridge::CvImage(hdr, "16UC1", ir_16).toImageMsg());
+          ir_info_.header.stamp = now;
+          ir_info_pub_->publish(ir_info_);
+        }
+      }
+
+      listener_depth_ir_->release(frames);
+    }
+    RCLCPP_INFO(get_logger(), "depthIrLoop terminado.");
+  }
+
+  // ── Members ──────────────────────────────────────────────────────────────
+
+  image_transport::Publisher color_pub_, depth_pub_, ir_pub_, resized_pub_;
+  rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr
+    color_info_pub_, depth_info_pub_, ir_info_pub_;
+
+  std::atomic<bool> running_;
+  std::thread       color_thread_, depth_ir_thread_;
+
+  libfreenect2::Freenect2         freenect2_;
+  libfreenect2::Freenect2Device * dev_;
+  libfreenect2::PacketPipeline *  pipeline_;  // owned by dev_ after openDevice()
+  std::unique_ptr<libfreenect2::SyncMultiFrameListener> listener_color_, listener_depth_ir_;
+  std::unique_ptr<libfreenect2::Registration>           registration_;
+
+  // Pre-built camera_info (only stamp updated per frame — no per-frame allocation)
+  sensor_msgs::msg::CameraInfo color_info_, depth_info_, ir_info_;
+
+  // Parameters
+  bool        pub_color_, pub_depth_, pub_ir_, pub_resized_color_;
+  int         resized_width_, resized_height_, timeout_ms_;
+  std::string color_frame_id_, depth_frame_id_, ir_frame_id_;
+};
+
+int main(int argc, char * argv[])
+{
+  rclcpp::init(argc, argv);
+  rclcpp::spin(std::make_shared<Kinect2Bridge>());
+  rclcpp::shutdown();
+  return 0;
+}
