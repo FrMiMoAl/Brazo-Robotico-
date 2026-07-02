@@ -1,0 +1,587 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- This URDF was automatically created by SolidWorks to URDF Exporter! Originally created by Stephen Brawner (brawner@gmail.com) 
+     Commit Version: 1.6.0-4-g7f85cfe  Build Version: 1.6.7995.38578
+     For more information, please see http://wiki.ros.org/sw_urdf_exporter -->
+<robot
+  name="urdf sin gripper">
+  <link
+    name="base_link">
+    <inertial>
+      <origin
+        xyz="0.0620154234110682 0.0287828530200332 0.0194399840557853"
+        rpy="0 0 0" />
+      <mass
+        value="0.814654269422783" />
+      <inertia
+        ixx="0.00321225759807019"
+        ixy="-5.94963872437991E-05"
+        ixz="-4.09310030216239E-06"
+        iyy="0.00681091711547534"
+        iyz="1.70805052077488E-07"
+        izz="0.00410985447956931" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://urdf sin gripper/meshes/base_link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://urdf sin gripper/meshes/base_link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <link
+    name="1">
+    <inertial>
+      <origin
+        xyz="0.0194962568603395 0.0112262595729474 0.0781135135871188"
+        rpy="0 0 0" />
+      <mass
+        value="0.355121607272122" />
+      <inertia
+        ixx="0.00125603540832503"
+        ixy="-0.000555249016360597"
+        ixz="0.000259680745666649"
+        iyy="0.00189659689264714"
+        iyz="0.000150449864511745"
+        izz="0.00165493751639618" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://urdf sin gripper/meshes/1.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://urdf sin gripper/meshes/1.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="1"
+    type="continuous">
+    <origin
+      xyz="0.045435 -0.019492 0.042792"
+      rpy="0 0 -1.01533" />
+    <parent
+      link="base_link" />
+    <child
+      link="1" />
+    <axis
+      xyz="0 0 1" />
+  </joint>
+  <link
+    name="2">
+    <inertial>
+      <origin
+        xyz="0.0321774632843499 0.038751597886396 0.129793728764849"
+        rpy="0 0 0" />
+      <mass
+        value="0.514087338751135" />
+      <inertia
+        ixx="0.00180785055102584"
+        ixy="7.7480280247106E-05"
+        ixz="-0.000644825608500349"
+        iyy="0.00201837695644572"
+        iyz="3.95369173930041E-05"
+        izz="0.000642830284233535" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://urdf sin gripper/meshes/2.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://urdf sin gripper/meshes/2.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="2"
+    type="continuous">
+    <origin
+      xyz="0 0 0.093058"
+      rpy="1.2140837 -1.0185975 2.4015789" />
+    <parent
+      link="1" />
+    <child
+      link="2" />
+    <axis
+      xyz="0.5 -0.86603 0" />
+  </joint>
+  <link
+    name="3">
+    <inertial>
+      <origin
+        xyz="0.160285270725544 0.0390539200540733 -0.0327831629997222"
+        rpy="0 0 0" />
+      <mass
+        value="0.148273898279601" />
+      <inertia
+        ixx="5.33432316662096E-05"
+        ixy="-3.05054815237732E-06"
+        ixz="3.81633242302653E-05"
+        iyy="0.000225521073819987"
+        iyz="5.28305588815489E-07"
+        izz="0.000231079183202213" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://urdf sin gripper/meshes/3.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://urdf sin gripper/meshes/3.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="3"
+    type="continuous">
+    <origin
+      xyz="0.11856 0.068452 0.37687"
+      rpy="0 1.260502 0.5236" />
+    <parent
+      link="2" />
+    <child
+      link="3" />
+    <axis
+      xyz="0 -1 0" />
+  </joint>
+  <link
+    name="4">
+    <inertial>
+      <origin
+        xyz="0.021683 -0.016889 0.028812"
+        rpy="0 0 0" />
+      <mass
+        value="0.0891556465" />
+      <inertia
+        ixx="3.18119772e-05"
+        ixy="-1.64344740e-06"
+        ixz="1.39260122e-06"
+        iyy="2.83484290e-05"
+        iyz="8.44426795e-08"
+        izz="3.15928887e-05" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="3.14159265 -0.16485988 -3.14159265" />
+      <geometry>
+        <mesh
+          filename="package://brazo4/meshes/4.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="3.14159265 -0.16485988 -3.14159265" />
+      <geometry>
+        <mesh
+          filename="package://brazo4/meshes/4.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="4"
+    type="continuous">
+    <origin
+      xyz="0.2336495 0 -0.0478555"
+      rpy="0 2.0595163 0" />
+    <parent
+      link="3" />
+    <child
+      link="4" />
+    <axis
+      xyz="0 -1 0" />
+  </joint>
+  <link
+    name="left_link">
+    <inertial>
+      <origin
+        xyz="-0.000469947739679344 0.0174936888359443 -0.0029999999999992"
+        rpy="0 0 0" />
+      <mass
+        value="0.00336762222486258" />
+      <inertia
+        ixx="6.27470613399457E-07"
+        ixy="1.55947433705621E-08"
+        ixz="1.32348898008484E-23"
+        iyy="4.73790672083763E-08"
+        iyz="-6.15422375739453E-22"
+        izz="6.1872264352679E-07" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://brazo4/meshes/left_link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://brazo4/meshes/left_link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="left_joint"
+    type="continuous">
+    <origin
+      xyz="0.050729 0 0.063431"
+      rpy="1.570793 0.24573 -3.141593" />
+    <parent
+      link="4" />
+    <child
+      link="left_link" />
+    <axis
+      xyz="0 0 1" />
+  </joint>
+  <link
+    name="right_link">
+    <inertial>
+      <origin
+        xyz="4.44089209850063E-15 -0.0174999999999941 0.00299999999999842"
+        rpy="0 0 0" />
+      <mass
+        value="0.00336762222486259" />
+      <inertia
+        ixx="6.27889548162521E-07"
+        ixy="1.11834818817169E-21"
+        ixz="1.98523347012727E-23"
+        iyy="4.69601324453143E-08"
+        iyz="-4.11108764438855E-22"
+        izz="6.18722643526792E-07" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://brazo4/meshes/right_link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://brazo4/meshes/right_link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="right_joint"
+    type="continuous">
+    <origin
+      xyz="0.059521 0 0.055264"
+      rpy="1.5708 -1.423133 0" />
+    <parent
+      link="4" />
+    <child
+      link="right_link" />
+    <axis
+      xyz="0 0 1" />
+  </joint>
+  <link
+    name="left_gear">
+    <inertial>
+      <origin
+        xyz="-0.0026795656578391 9.41469124882133E-14 -0.00283964882715954"
+        rpy="0 0 0" />
+      <mass
+        value="0.0208170455983242" />
+      <inertia
+        ixx="4.74146880578324E-06"
+        ixy="1.37642853928824E-21"
+        ixz="-1.89418670297643E-08"
+        iyy="3.75851791717856E-06"
+        iyz="-8.5232690317464E-21"
+        izz="2.19540725542138E-06" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://brazo4/meshes/left_gear.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="1 0.949019607843137 0.909803921568627 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://brazo4/meshes/left_gear.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="left_gear joint"
+    type="continuous">
+    <origin
+      xyz="0.024923 0 0.053281"
+      rpy="2.922713 0 1.570793" />
+    <parent
+      link="4" />
+    <child
+      link="left_gear" />
+    <axis
+      xyz="1 0 0" />
+  </joint>
+  <link
+    name="left_flange_link">
+    <inertial>
+      <origin
+        xyz="0.00767435122711868 0.0771367226411808 0.015000001722807"
+        rpy="0 0 0" />
+      <mass
+        value="0.00826543780479247" />
+      <inertia
+        ixx="8.37291786400787E-06"
+        ixy="-5.42084452593398E-07"
+        ixz="-7.71139546922056E-15"
+        iyy="6.05144730729735E-07"
+        iyz="-2.58716812308386E-13"
+        izz="8.0691291860278E-06" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://brazo4/meshes/left_flange_link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://brazo4/meshes/left_flange_link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="left_flange_joint"
+    type="revolute">
+    <origin
+      xyz="0.012 -0.028276 -0.014373"
+      rpy="-1.5708 -0.9674 1.5708" />
+    <parent
+      link="left_gear" />
+    <child
+      link="left_flange_link" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="-3.14159"
+      upper="3.14159"
+      effort="100"
+      velocity="10" />
+  </joint>
+  <link
+    name="right_gear">
+    <inertial>
+      <origin
+        xyz="0.00299999999999906 0.000235018102530349 -0.00268626920278137"
+        rpy="0 0 0" />
+      <mass
+        value="0.0220238578526573" />
+      <inertia
+        ixx="4.81786570325031E-06"
+        ixy="-8.20563167652603E-22"
+        ixz="-1.85288457211878E-21"
+        iyy="3.86576031906346E-06"
+        iyz="1.36744377629716E-07"
+        izz="2.31472851349092E-06" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://brazo4/meshes/right_gear.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="1 0.949019607843137 0.909803921568627 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://brazo4/meshes/right_gear.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="right_gear_joint"
+    type="continuous">
+    <origin
+      xyz="0.0513 0 0.028781"
+      rpy="1.335933 0 -1.570793" />
+    <parent
+      link="4" />
+    <child
+      link="right_gear" />
+    <axis
+      xyz="1 0 0" />
+  </joint>
+  <link
+    name="right_flange_link">
+    <inertial>
+      <origin
+        xyz="0.00861288716235192 0.0421496228005386 1.72273731391392E-09"
+        rpy="0 0 0" />
+      <mass
+        value="0.00826543780464267" />
+      <inertia
+        ixx="8.37295282606807E-06"
+        ixy="-5.41833899799247E-07"
+        ixz="-7.71887826415572E-15"
+        iyy="6.05109768626792E-07"
+        iyz="-2.58708945384009E-13"
+        izz="8.06912918599556E-06" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://brazo4/meshes/right_flange_link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://brazo4/meshes/right_flange_link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="right_flange_joint"
+    type="revolute">
+    <origin
+      xyz="0.003 0.0030505 -0.034867"
+      rpy="-1.5708 -1.0572 1.5708" />
+    <parent
+      link="right_gear" />
+    <child
+      link="right_flange_link" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="-3.14159"
+      upper="3.14159"
+      effort="100"
+      velocity="10" />
+  </joint>
+</robot>
