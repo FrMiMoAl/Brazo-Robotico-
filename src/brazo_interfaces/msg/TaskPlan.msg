@@ -1,0 +1,9 @@
+std_msgs/Header header
+string task
+string object_id
+string class_name
+string selection
+string place_zone
+string raw_json
+bool valid
+string reason

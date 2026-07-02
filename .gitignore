@@ -1,6 +1,15 @@
 build/
 install/
 log/
+# build/install/log son symlinks en este workspace (ver README_LLM_KINECT_BRAZO.md
+# seccion 0); los patrones con "/" de arriba no matchean symlinks, asi que se
+# repiten sin barra final para cubrir tambien ese caso.
+/build
+/install
+/log
 .vscode/
 *.pyc
-
+__pycache__/
+*.deb
+*.pt
+jetson-containers/

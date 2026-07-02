@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>object_3d_detector</name>
+  <version>0.0.1</version>
+  <description>YOLO + Kinect depth to geometry_msgs Point</description>
+
+  <maintainer email="franco@example.com">franco</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_python</buildtool_depend>
+
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>cv_bridge</exec_depend>
+  <exec_depend>brazo_interfaces</exec_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

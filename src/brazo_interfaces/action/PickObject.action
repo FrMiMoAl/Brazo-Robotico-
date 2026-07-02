@@ -1,0 +1,10 @@
+string class_name
+string object_id
+string selection
+string place_zone
+---
+bool success
+string message
+---
+string state
+geometry_msgs/PointStamped current_target
