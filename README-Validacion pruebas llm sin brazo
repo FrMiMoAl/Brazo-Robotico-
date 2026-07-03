@@ -1,0 +1,77 @@
+Listed directory launch
+Viewed llm_kinect_brazo.launch.py:1-195
+
+Para lanzar todo tu entorno ordenadamente y probar el logger experimental, necesitas abrir **5 terminales**. Aquí tienes los comandos exactos para cada una:
+
+---
+
+### Terminal 1: Driver de la Kinect
+Inicia la cámara para publicar las imágenes y las nubes de puntos.
+```bash
+cd ~/ros2_ws2
+source /opt/ros/humble/setup.bash
+source install/setup.bash
+ros2 run kinect2_bridge kinect2_bridge_node
+```
+
+---
+
+### Terminal 2: Detector YOLO de color (Objeto Rojo)
+Procesa la imagen y publica el punto 3D del objeto en el frame de la cámara.
+```bash
+cd ~/ros2_ws2
+source /opt/ros/humble/setup.bash
+source install/setup.bash
+ros2 run object_3d_detector yolo_depth_to_point --ros-args -p target_class:=red
+```
+
+---
+
+### Terminal 3: Transformación Física Estática (TF)
+Publica la matriz de calibración física (la última que usamos). Es **obligatoria** para que el nodo de `camera_to_base` funcione.
+```bash
+cd ~/ros2_ws2
+source /opt/ros/humble/setup.bash
+source install/setup.bash
+ros2 run tf2_ros static_transform_publisher -0.0033 -0.3675 -0.4392 -0.0752 -0.1524 -2.9655 base_link kinect2_depth_optical_frame
+```
+
+---
+
+### Terminal 4: Toda la Arquitectura LLM en Modo Seguro
+Afortunadamente, tu workspace ya tiene un archivo `launch` que levanta todos tus nodos de IA a la vez (incluyendo `camera_to_base_node`, `scene_state`, `llm_agent`, `task_executor` y `safety_guard`). Por defecto arranca en `dry_run:=true`, así que es perfecto:
+```bash
+cd ~/ros2_ws2
+source /opt/ros/humble/setup.bash
+source install/setup.bash
+ros2 launch brazo_ai llm_kinect_brazo.launch.py dry_run:=true
+```
+
+---
+
+### Terminal 5: El Logger Experimental (¡Nuestro script nuevo!)
+Este nodo interceptará todos los mensajes y escribirá el archivo `.csv`.
+```bash
+cd ~/ros2_ws2
+source /opt/ros/humble/setup.bash
+source install/setup.bash
+ros2 run brazo_ai experimental_logger
+```
+
+---
+
+### ¿Cómo realizar una prueba para el paper?
+Una vez que las 5 terminales estén corriendo, abre una terminal adicional para enviar comandos de texto (como lo haría el usuario hablando por el micrófono).
+
+Por ejemplo, envía:
+```bash
+ros2 topic pub --once /user_command std_msgs/msg/String "{data: 'agarrame el objeto rojo por favor'}"
+```
+
+El **logger (Terminal 5)** capturará:
+1. El momento exacto en que enviaste el comando.
+2. Cuánto tardó el `llm_agent` en responder con el JSON.
+3. El objeto rojo capturado por la cámara vs su posición en `base_link`.
+4. Todos los pasos que el `task_executor` intenta dar y cómo el `safety_guard` los procesa (ya sea aceptándolos en modo Dry-Run o rechazándolos si se van de los límites).
+
+Al final de todas tus pruebas, puedes abrir `~/ros2_ws2/experimental_metrics.csv` y rellenar las columnas de "Ground Truth".
