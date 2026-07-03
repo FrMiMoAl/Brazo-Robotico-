@@ -1,0 +1,379 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- This URDF was automatically created by SolidWorks to URDF Exporter! Originally created by Stephen Brawner (brawner@gmail.com) 
+     Commit Version: 1.6.0-4-g7f85cfe  Build Version: 1.6.7995.38578
+     For more information, please see http://wiki.ros.org/sw_urdf_exporter -->
+<robot
+  name="Brazo4">
+  <!-- Dummy root link (fixes KDL warning about inertia on root) -->
+  <link name="base_link"/>
+  <joint name="base_fixed" type="fixed">
+    <origin xyz="0 0 0" rpy="-1.5708 0 0"/>
+    <parent link="base_link"/>
+    <child link="BL"/>
+  </joint>
+  <link
+    name="BL">
+    <inertial>
+      <origin
+        xyz="0.68004907502854 0.0250358038800207 1.43461136648188"
+        rpy="0 0 0" />
+      <mass
+        value="0.216624982790517" />
+      <inertia
+        ixx="0.000171878068130116"
+        ixy="-3.33832683541553E-06"
+        ixz="5.68766101385238E-07"
+        iyy="0.000274157209842806"
+        iyz="-2.34732330817513E-06"
+        izz="0.000179018138290511" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://brazo4/meshes/BL.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://brazo4/meshes/BL.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <link
+    name="L1">
+    <inertial>
+      <origin
+        xyz="-0.000309793943073955 -0.00513409677808996 -0.0762146130753223"
+        rpy="0 0 0" />
+      <mass
+        value="0.392037903021729" />
+      <inertia
+        ixx="0.0010305315081974"
+        ixy="-2.30657987313236E-06"
+        ixz="-4.7995776810544E-06"
+        iyy="0.00112787372936762"
+        iyz="-3.16229732071866E-05"
+        izz="0.000375839383901312" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://brazo4/meshes/L1.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://brazo4/meshes/L1.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="J1"
+    type="revolute">
+    <origin
+      xyz="0.68259 -1.4348 0.0445"
+      rpy="3.1416 0 1.35263" />
+    <parent
+      link="BL" />
+    <child
+      link="L1" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="-1.78896"
+      upper="4.49422"
+      effort="100"
+      velocity="1.0" />
+  </joint>
+  <link
+    name="L2">
+    <inertial>
+      <origin
+        xyz="-0.0493756831059547 -0.00301554846344509 -0.129289015408759"
+        rpy="0 0 0" />
+      <mass
+        value="0.601755016238767" />
+      <inertia
+        ixx="0.00308506853634869"
+        ixy="-3.89378178455608E-05"
+        ixz="-0.000774922123386249"
+        iyy="0.0026199807500654"
+        iyz="-0.000101700297074094"
+        izz="0.00135154984802928" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://brazo4/meshes/L2.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://brazo4/meshes/L2.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="J2"
+    type="revolute">
+    <origin
+      xyz="0 0 -0.060218"
+      rpy="0 0.6425546 0" />
+    <parent
+      link="L1" />
+    <child
+      link="L2" />
+    <axis
+      xyz="0 1 0" />
+    <limit
+      lower="-2.443461"
+      upper="0.0"
+      effort="100"
+      velocity="1.0" />
+  </joint>
+  <link
+    name="L3">
+    <inertial>
+      <origin
+        xyz="0.161138326166615 0.0229391632136013 -0.0330352082663228"
+        rpy="0 0 0" />
+      <mass
+        value="0.150214193499823" />
+      <inertia
+        ixx="3.8962042143273E-05"
+        ixy="-1.88798036481879E-06"
+        ixz="3.77138125625583E-05"
+        iyy="0.000223777685716378"
+        iyz="3.22888902910438E-07"
+        izz="0.000214613686148874" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://brazo4/meshes/L3.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://brazo4/meshes/L3.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="J3"
+    type="revolute">
+    <origin
+      xyz="-0.16402 0.010151 -0.42946"
+      rpy="3.14159 -1.202132 3.14159" />
+    <parent
+      link="L2" />
+    <child
+      link="L3" />
+    <axis
+      xyz="0 -1 0" />
+    <limit
+      lower="0.0"
+      upper="2.617994"
+      effort="100"
+      velocity="1.0" />
+  </joint>
+  <link
+    name="L4">
+    <inertial>
+      <origin
+        xyz="-0.00269903375587649 -0.0173904129270954 -0.00408667730492152"
+        rpy="0 0 0" />
+      <mass
+        value="0.0310036200190479" />
+      <inertia
+        ixx="9.25098038318168E-06"
+        ixy="-2.61769794792403E-07"
+        ixz="-4.91764161077723E-07"
+        iyy="8.96685575236947E-06"
+        iyz="-3.96344741142352E-07"
+        izz="8.83116428805205E-06" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://brazo4/meshes/L4.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://brazo4/meshes/L4.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="J4"
+    type="revolute">
+    <origin
+      xyz="0.2336495 0 -0.0478555"
+      rpy="0 1.0730563 0" />
+    <parent
+      link="L3" />
+    <child
+      link="L4" />
+    <axis
+      xyz="0 -1 0" />
+    <limit
+      lower="0.0"
+      upper="3.141593"
+      effort="100"
+      velocity="1.0" />
+  </joint>
+
+  <!-- ================= GRIZZER / TIJERA EFFECTOR ================= -->
+  
+  <!-- Gripper Base connected to L4 -->
+  <link name="gripper_base">
+    <visual>
+      <origin xyz="0 0 0.03" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="0.02" length="0.06"/>
+      </geometry>
+      <material name="dark_grey">
+        <color rgba="0.2 0.2 0.2 1.0"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0.03" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="0.02" length="0.06"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="0.01"/>
+      <inertia ixx="1e-5" ixy="0" ixz="0" iyy="1e-5" iyz="0" izz="1e-5"/>
+    </inertial>
+  </link>
+
+  <joint name="gripper_base_joint" type="fixed">
+    <!-- Se coloca en la punta del eslabón L4 -->
+    <origin xyz="0 0 0" rpy="0 1.5708 0"/>
+    <parent link="L4"/>
+    <child link="gripper_base"/>
+  </joint>
+
+  <!-- Tijera Izquierda (Móvil) -->
+  <link name="tijera_izq">
+    <visual>
+      <origin xyz="0.04 0 0.005" rpy="0 0 0.3"/>
+      <geometry>
+        <box size="0.09 0.01 0.005"/>
+      </geometry>
+      <material name="silver">
+        <color rgba="0.8 0.8 0.8 1.0"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0.04 0 0.005" rpy="0 0 0.3"/>
+      <geometry>
+        <box size="0.09 0.01 0.005"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="0.005"/>
+      <inertia ixx="1e-6" ixy="0" ixz="0" iyy="1e-6" iyz="0" izz="1e-6"/>
+    </inertial>
+  </link>
+
+  <joint name="joint_tijera_izq" type="revolute">
+    <origin xyz="0 -0.01 0.06" rpy="0 0 0"/>
+    <parent link="gripper_base"/>
+    <child link="tijera_izq"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-0.6" upper="0.6" effort="10" velocity="1.0"/>
+  </joint>
+
+  <!-- Tijera Derecha (Móvil) -->
+  <link name="tijera_der">
+    <visual>
+      <origin xyz="0.04 0 -0.005" rpy="0 0 -0.3"/>
+      <geometry>
+        <box size="0.09 0.01 0.005"/>
+      </geometry>
+      <material name="silver"/>
+    </visual>
+    <collision>
+      <origin xyz="0.04 0 -0.005" rpy="0 0 -0.3"/>
+      <geometry>
+        <box size="0.09 0.01 0.005"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="0.005"/>
+      <inertia ixx="1e-6" ixy="0" ixz="0" iyy="1e-6" iyz="0" izz="1e-6"/>
+    </inertial>
+  </link>
+
+  <joint name="joint_tijera_der" type="revolute">
+    <origin xyz="0 0.01 0.06" rpy="0 0 0"/>
+    <parent link="gripper_base"/>
+    <child link="tijera_der"/>
+    <axis xyz="0 0 1"/>
+    <!-- Rota opuesto a la izquierda -->
+    <limit lower="-0.6" upper="0.6" effort="10" velocity="1.0"/>
+  </joint>
+</robot>
