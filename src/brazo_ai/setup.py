@@ -35,6 +35,9 @@ setup(
             'safety_guard_node = brazo_ai.safety_guard_node:main',
             'manual_plan_node = brazo_ai.manual_plan_node:main',
             'calibrate_kabsch = brazo_ai.calibrate_kabsch:main',
+            'tag_calibrator = brazo_ai.tag_calibrator:main',
+            'red_to_base_printer = brazo_ai.red_to_base_printer:main',
+            'experimental_logger = brazo_ai.experimental_logger_node:main',
         ],
     },
 )

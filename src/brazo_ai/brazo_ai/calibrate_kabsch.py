@@ -63,64 +63,81 @@ def main():
     print("=========================================================\n")
     print("Por favor, ingresa al menos 4 puntos en el frame de la CÁMARA")
     print("y sus correspondientes posiciones medidas físicamente en la BASE.\n")
-    
-    # Ejemplo de puntos iniciales de prueba (para guiar al usuario)
-    print("Ejemplo de formato: X Y Z (separados por espacio)")
-    print("Punto 1 en Base: 0.18 0.00 0.05")
-    print("Punto 1 en Camara: 0.02 -0.05 0.52\n")
 
-    # Intentar obtener los puntos interactivamente si se ejecuta por terminal
-    try:
-        n_points = int(input("¿Cuántos puntos de calibración vas a ingresar? (mínimo 4): "))
-        if n_points < 4:
-            print("[ERROR] Se necesitan al menos 4 puntos para una calibración estable.")
+    # -----------------------------------------------
+    # 1) Intentar cargar un archivo de muestras
+    # -----------------------------------------------
+    import os
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--samples_file', help="Archivo con puntos (Xb Yb Zb Xc Yc Zc)", default=None)
+    args, unknown = parser.parse_known_args()
+    samples_file = args.samples_file
+
+    if samples_file and os.path.isfile(samples_file):
+        print(f"[INFO] Cargando muestras desde archivo: {samples_file}")
+        data = np.loadtxt(samples_file)
+        if data.shape[1] != 6:
+            print("[ERROR] El archivo debe contener 6 columnas (X_base Y_base Z_base X_cam Y_cam Z_cam).")
             sys.exit(1)
-    except ValueError:
-        print("[ERROR] Entrada inválida. Usando ejemplo predeterminado de 5 puntos para validación.")
-        # Puntos de ejemplo ficticios pero coherentes geométricamente para verificar
-        n_points = 5
-        
-    points_cam_list = []
-    points_base_list = []
-    
-    print("\n--- INGRESO DE COORDENADAS (Unidades en METROS) ---")
-    for i in range(n_points):
-        print(f"\n[Punto {i+1}]")
-        # Base
-        while True:
-            try:
-                inp = input(f"  Posición del objeto en BASE (X Y Z respecto a base_link): ")
-                # Si presionó Enter vacío y estamos en modo test
-                if not inp.strip():
-                    raise ValueError
-                x, y, z = map(float, inp.strip().split())
-                points_base_list.append([x, y, z])
-                break
-            except ValueError:
-                print("  [ERROR] Formato inválido. Ingresá 3 números flotantes separados por espacio (Ej: 0.20 0.0 0.05)")
-                
-        # Cámara
-        while True:
-            try:
-                inp = input(f"  Lectura en CÁMARA /perception/selected_object_camera (X Y Z): ")
-                if not inp.strip():
-                    raise ValueError
-                x, y, z = map(float, inp.strip().split())
-                points_cam_list.append([x, y, z])
-                break
-            except ValueError:
-                print("  [ERROR] Formato inválido. Ingresá 3 números flotantes separados por espacio (Ej: 0.03 -0.02 0.45)")
+        if data.shape[0] < 4:
+            print("[ERROR] Se requieren al menos 4 puntos para calibrar.")
+            sys.exit(1)
+        # Separar en matrices
+        points_base = data[:, 0:3]
+        points_cam = data[:, 3:6]
+    else:
+        # ------------------------------------------------
+        # 2) Modo interactivo
+        # ------------------------------------------------
+        try:
+            n_points = int(input("¿Cuántos puntos de calibración vas a ingresar? (mínimo 4): "))
+            if n_points < 4:
+                print("[ERROR] Se necesitan al menos 4 puntos para una calibración estable.")
+                sys.exit(1)
+        except ValueError:
+            print("[ERROR] Entrada inválida. Usando ejemplo predeterminado de 5 puntos para validación.")
+            n_points = 5
 
-    A = np.array(points_cam_list)
-    B = np.array(points_base_list)
-    
+        points_cam_list = []
+        points_base_list = []
+
+        print("\n--- INGRESO DE COORDENADAS (Unidades en METROS) ---")
+        for i in range(n_points):
+            print(f"\n[Punto {i+1}]")
+            # Base
+            while True:
+                try:
+                    inp = input("  Posición del objeto en BASE (X Y Z respecto a base_link): ")
+                    if not inp.strip():
+                        raise ValueError
+                    x, y, z = map(float, inp.strip().split())
+                    points_base_list.append([x, y, z])
+                    break
+                except ValueError:
+                    print("  [ERROR] Formato inválido. Ingresá 3 números flotantes separados por espacio (Ej: 0.20 0.0 0.05)")
+            # Cámara
+            while True:
+                try:
+                    inp = input("  Lectura en CÁMARA /perception/selected_object_camera (X Y Z): ")
+                    if not inp.strip():
+                        raise ValueError
+                    x, y, z = map(float, inp.strip().split())
+                    points_cam_list.append([x, y, z])
+                    break
+                except ValueError:
+                    print("  [ERROR] Formato inválido. Ingresá 3 números flotantes separados por espacio (Ej: 0.03 -0.02 0.45)")
+
+        points_base = np.array(points_base_list)
+        points_cam = np.array(points_cam_list)
+
     # Ejecutar Kabsch
-    R, t = kabsch_calibration(A, B)
+    R, t = kabsch_calibration(points_cam, points_base)
     roll, pitch, yaw = rotation_matrix_to_euler(R)
-    
+
     # Calcular error de alineacion medio (RMSD)
-    aligned_A = np.dot(A, R.T) + t
-    errors = np.linalg.norm(aligned_A - B, axis=1)
+    aligned_cam = np.dot(points_cam, R.T) + t
+    errors = np.linalg.norm(aligned_cam - points_base, axis=1)
     rmsd = np.sqrt(np.mean(errors**2))
     
     print("\n=========================================================")

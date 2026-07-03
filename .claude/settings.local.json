@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(colcon build *)"
+      "Bash(colcon build *)",
+      "Bash(pkill -f \"ros2 launch brazo_ai\")",
+      "Bash(pkill -f \"camera_to_base_node\\\\|scene_state_node\\\\|llm_agent_node\\\\|manual_plan_node\\\\|task_executor_node\\\\|safety_guard_node\")"
     ]
   }
 }

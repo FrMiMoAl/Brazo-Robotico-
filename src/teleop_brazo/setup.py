@@ -17,7 +17,9 @@ setup(
     maintainer_email='franco@todo.todo',
     description='Interactive keyboard teleoperation node for a 4-DOF robotic arm and gripper.',
     license='Apache-2.0',
-    tests_require=['pytest'],
+    extras_require={
+        'test': ['pytest'],
+    },
     entry_points={
         'console_scripts': [
             'teleop_node = teleop_brazo.teleop_node:main'
