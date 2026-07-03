@@ -1,4 +1,4 @@
-# 🤖 Componente de Simulación 3D y Control Cinemático (NEMA + Pololu + Servos)
+# Componente de Simulación 3D y Control Cinemático (NEMA + Pololu + Servos)
 
 ## Integrantes
 * Franco Morales
@@ -8,9 +8,9 @@
 
 ---
 
-## 📝 Descripción del Módulo
+## Descripción del Módulo
 
-[cite_start]Este componente del proyecto final para **IMT-342 Robótica - UCB** [cite: 1, 2] contiene el software de integración, mapeo geométrico y control cinemático desarrollado para operar un brazo robótico físico de 4 Grados de Libertad (DOF) más un actuador final (Gripper). 
+Este componente del proyecto final para **IMT-342 Robótica - UCB** contiene el software de integración, mapeo geométrico y control cinemático desarrollado para operar un brazo robótico físico de 4 Grados de Libertad (DOF) más un actuador final (Gripper). 
 
 A través de este módulo se resuelven de forma unificada tres grandes desafíos del proyecto:
 1. **Calibración y Unificación de Orígenes:** El punto de origen absoluto del espacio cartesiano `(0.0, 0.0, 0.0)` se ha fijado en el suelo, exactamente alineado con el eje central del primer motor físico (NEMA). Se eliminaron mediante software las desorientaciones diagonales y desfases lineales residuales provenientes de la exportación del diseño CAD (SolidWorks), logrando que un comando a $0^\circ$ apunte estrictamente al frente en el eje global del mundo.
@@ -19,7 +19,7 @@ A través de este módulo se resuelven de forma unificada tres grandes desafíos
 
 ---
 
-## 🛠️ Especificaciones de Acoplamiento y Mapeo
+## Especificaciones de Acoplamiento y Mapeo
 
 Para garantizar un gemelo digital exacto entre el modelo virtual URDF y el hardware real, el puente de comunicación opera bajo la siguiente matriz de asignación y conversión:
 
@@ -33,7 +33,7 @@ Para garantizar un gemelo digital exacto entre el modelo virtual URDF y el hardw
 
 ---
 
-## ⚙️ Requisitos del Sistema y Dependencias
+## Requisitos del Sistema y Dependencias
 
 * **Sistema Operativo:** Ubuntu 24.04 LTS
 * **Middleware:** ROS 2 Jazzy Jalisco (Instalación Desktop Completa)
@@ -41,12 +41,68 @@ Para garantizar un gemelo digital exacto entre el modelo virtual URDF y el hardw
 
 ---
 
-## 🚀 Compilación e Instalación
+## Compilación e Instalación
 
-Para construir de forma limpia este paquete e instalar los scripts ejecutables en tu entorno de ROS 2 local, ejecuta los siguientes comandos desde la raíz de tu workspace:
+Dentro de la carpeta se encontrara 3 carpetas 
+* **brazo4_ws**
+* **Codigo_Esp32**
+* **first_ws**
+
+En la carpeta de Codigo Esp32 encontrares el codigo que debemos de cargar a la esp32 mediante Arduino IDE, una vez subido este codigo recibira los siguientes topicos ya mencionados 
+
+Ahora en la siguiente carpeta brazo4_ws se encuentra el URDF **ros2 launch brazo4 control.launch.py** y el codigo que convierte los topicos que a los radianes para que se pueda mover el brazo **ros2 run brazo4 robot_mode_server.py** 
+
+En la siguiente carpeta tenemos first_ws tenemos el codigo de la cinematica inversa **ros2 run Exa_Prac robot_mode_server**
+
+
+Para ejecutar el robot y el URDF, tenemos que abrir varias terminales 
+### Terminal 1 - micro-ROS Agent (Docker)
 
 ```bash
-cd ~/Robotica_class/brazo4_ws
-rm -rf build/ brazo4/ install/brazo4/
-colcon build --packages-select brazo4
+docker run --rm --network host \
+  -e ROS_DOMAIN_ID=69 \
+  microros/micro-ros-agent:jazzy \
+  udp4 --port 8888
+```
+### Terminal 2 - URDF
+
+```
+cd brazo4_ws
+colcon build
 source install/setup.bash
+ros2 launch brazo4 control.launch.py
+```
+### Terminal 3 - Cinematica inversa
+```
+cd first_ws
+colcon build
+source install/setup.bash
+ros2 run Exa_Prac robot_mode_server 
+```
+### Terminal 4 - Posiciones
+En este se puede ver tanto una posicion exacta mediante cinematica inversa o mover los motores independientemente
+#### Cinematica inversa
+```
+ros2 topic pub --once /brazo/target_xyz geometry_msgs/msg/Point "{x: 0.2, y: 0.0, z: 0.4}"
+
+```
+#### Motores independientes
+```
+#servo1
+ros2 topic pub /servo1/target_deg std_msgs/msg/Int32 "{data: 0}" --once
+
+#servo2
+ros2 topic pub /servo2/target_deg std_msgs/msg/Int32 "{data: 0}" --once
+
+#servo3
+ros2 topic pub /servo3/target_deg std_msgs/msg/Int32 "{data: 0}" --once
+
+#Pololu
+ros2 topic pub /motor_pololu/target_deg std_msgs/msg/Float32 "{data: 0.0}" --once
+
+#nema
+ros2 topic pub -r 2 /motor_nema/target_deg std_msgs/msg/Float32 "{data: 0}"
+
+
+```
+
