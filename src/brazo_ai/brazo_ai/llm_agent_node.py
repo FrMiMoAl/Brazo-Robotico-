@@ -1,184 +1,221 @@
 #!/usr/bin/env python3
-"""Convierte instrucciones humanas + scene_state en un plan JSON (/llm_plan).
+"""Nodo ROS 2 para la planificacion simbolica con LLM (OllamaBackend) y RobotPlan.
 
-El LLM (o el modo determinista MVP) SOLO planifica. Nunca publica en
-/joint_commands, /target_position ni /gripper_command. Ver
-brazo_ai/plan_utils.py para las reglas de validacion compartidas.
+Convierte instrucciones humanas (/user_command) + estado de la escena (/scene_state)
+en un plan JSON estructurado publicado en /llm_plan.
 
-Modo por defecto (use_llm_api:=false): traduccion determinista de texto a
-plan, sin red ni claves de API.
-
-Modo opcional (use_llm_api:=true): usa la API de Anthropic via la SDK
-oficial, leyendo la clave SOLO desde la variable de entorno
-ANTHROPIC_API_KEY (nunca hardcodeada). El plan devuelto por la API se
-valida igual que en el modo determinista antes de publicarse.
+El LLM SOLO planifica acciones de alto nivel. Nunca genera angulos, PWM ni topicos
+de control directo.
 """
 
 import json
 import os
+from typing import Optional
 
 import rclpy
 from rclpy.node import Node
-
 from std_msgs.msg import String
 
+from .llm_backend import OllamaBackend
+from .plan_schema import RobotPlan
 from . import plan_utils
 
-SYSTEM_PROMPT = """Eres un planificador de alto nivel para un brazo robotico de 4 grados de libertad con Kinect v2 en ROS 2.
-
-Recibiras:
-1. Una instruccion humana.
-2. Un JSON scene_state con objetos detectados, posiciones en base_link, estado del robot y zonas disponibles.
-
-Tu trabajo:
-Convertir la instruccion humana en un plan JSON valido.
-
-Reglas obligatorias:
-- No controles articulaciones.
-- No generes angulos.
-- No generes PWM.
-- No generes velocidades.
-- No publiques en /joint_commands.
-- No publiques en /target_position.
-- No publiques en /gripper_command.
-- No inventes coordenadas.
-- Usa solo objetos presentes en scene_state.
-- Usa solo zonas presentes en scene_state.
-- Si el objeto no existe, responde abort.
-- Si el objeto tiene reachable=false, responde abort.
-- Si el robot esta busy=true, responde abort u observe_scene.
-- Responde exclusivamente JSON. No expliques.
-
-Tareas permitidas:
-- observe_scene
-- pick_object
-- pick_and_place
-- open_gripper
-- close_gripper
-- go_home
-- abort
-
-Formato valido para pick and place:
-{
-  "task": "pick_and_place",
-  "object": {
-    "class_name": "red",
-    "selection": "largest_reachable"
-  },
-  "place_zone": "drop_zone_a"
-}
-
-Formato valido para abort:
-{
-  "task": "abort",
-  "reason": "explicacion_corta"
-}
+FALLBACK_SYSTEM_PROMPT = """You are a symbolic planner for a robotic arm.
+Never generate motor commands or coordinates.
+Use only objects available in the scene.
+Return an abort plan when the request is unsafe or impossible.
 """
 
 
 class LlmAgentNode(Node):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__("llm_agent_node")
 
-        self.declare_parameter("use_llm_api", False)
-        self.declare_parameter("llm_model", "claude-sonnet-5")
+        self.declare_parameter("model", "qwen3:4b-instruct")
+        self.declare_parameter("ollama_host", "http://localhost:11434")
+        self.declare_parameter("use_llm_api", True)
+        self.declare_parameter("prompt_file", "")
         self.declare_parameter("default_place_zone", "drop_zone_a")
 
+        model = self.get_parameter("model").get_parameter_value().string_value
+        host = self.get_parameter("ollama_host").get_parameter_value().string_value
         self.use_llm_api = bool(self.get_parameter("use_llm_api").value)
         self.default_place_zone = self.get_parameter("default_place_zone").value
+        self.prompt_file = self.get_parameter("prompt_file").value
 
-        self.latest_scene_state = {}
-        self._anthropic_client = None
+        self.current_scene: dict = {}
+        self.backend: Optional[OllamaBackend] = None
 
         if self.use_llm_api:
-            self._init_llm_client()
+            self._init_backend(model, host)
 
-        self.create_subscription(String, "/user_command", self.user_command_cb, 10)
-        self.create_subscription(String, "/scene_state", self.scene_state_cb, 10)
-        self.llm_plan_pub = self.create_publisher(String, "/llm_plan", 10)
-
-        self.get_logger().info(
-            f"llm_agent_node listo. use_llm_api={self.use_llm_api}. "
-            "Solo publica planes JSON en /llm_plan, nunca comandos directos."
+        # Suscripciones
+        self.create_subscription(
+            String,
+            "/scene_state",
+            self.scene_callback,
+            10,
         )
 
-    def _init_llm_client(self):
-        api_key = os.environ.get("ANTHROPIC_API_KEY")
-        if not api_key:
+        self.create_subscription(
+            String,
+            "/user_command",
+            self.command_callback,
+            10,
+        )
+
+        # Publicador de planes
+        self.plan_publisher = self.create_publisher(
+            String,
+            "/llm_plan",
+            10,
+        )
+
+        self.get_logger().info(
+            f"llm_agent_node iniciado. use_llm_api={self.use_llm_api}, model={model}, host={host}"
+        )
+
+    def _init_backend(self, model: str, host: str) -> None:
+        try:
+            self.backend = OllamaBackend(model=model, host=host)
+            self.get_logger().info(f"OllamaBackend inicializado con modelo '{model}' en '{host}'")
+        except Exception as exc:
             self.get_logger().error(
-                "use_llm_api=true pero ANTHROPIC_API_KEY no esta definida en el entorno. "
-                "Cayendo a modo determinista (use_llm_api se trata como false)."
+                f"No se pudo inicializar OllamaBackend ({exc}). "
+                "Cayendo a modo determinista."
             )
             self.use_llm_api = False
-            return
+            self.backend = None
 
+    def scene_callback(self, msg: String) -> None:
         try:
-            import anthropic
-        except ImportError:
-            self.get_logger().error(
-                "use_llm_api=true pero el paquete 'anthropic' no esta instalado "
-                "(pip install anthropic). Cayendo a modo determinista."
-            )
-            self.use_llm_api = False
-            return
-
-        self._anthropic_client = anthropic.Anthropic(api_key=api_key)
-
-    def scene_state_cb(self, msg: String):
-        try:
-            self.latest_scene_state = json.loads(msg.data)
+            self.current_scene = json.loads(msg.data)
         except json.JSONDecodeError:
-            self.get_logger().error("scene_state recibido no es JSON valido, se ignora.")
+            self.get_logger().error("scene_state recibido no es JSON valido.")
 
-    def user_command_cb(self, msg: String):
-        text = msg.data
-        self.get_logger().info(f"user_command recibido: '{text}'")
+    def command_callback(self, msg: String) -> None:
+        command_text = msg.data.strip()
+        self.get_logger().info(f"Comando recibido en /user_command: '{command_text}'")
 
-        if self.use_llm_api and self._anthropic_client is not None:
-            plan = self._plan_via_llm_api(text)
+        if self.use_llm_api and self.backend is not None:
+            self._process_command_with_llm(command_text)
         else:
-            plan = plan_utils.parse_user_command(text, self.default_place_zone)
+            self._process_command_deterministic(command_text)
 
-        valid, reason = plan_utils.validate_plan(plan, self.latest_scene_state)
-        if not valid:
-            self.get_logger().warn(f"Plan rechazado por validacion ({reason}): {plan}")
-            plan = plan_utils.abort_plan(reason)
+    def _process_command_with_llm(self, command_text: str) -> None:
+        if not self.current_scene:
+            self.get_logger().warn("No hay scene_state disponible. Publicando abort.")
+            self.publish_abort("scene_unavailable")
+            return
 
-        out = String()
-        out.data = plan_utils.plan_to_json(plan)
-        self.llm_plan_pub.publish(out)
-        self.get_logger().info(f"/llm_plan -> {out.data}")
+        user_prompt = (
+            "SCENE:\n"
+            f"{json.dumps(self.current_scene, indent=2)}\n\n"
+            "USER COMMAND:\n"
+            f"{command_text}"
+        )
 
-    def _plan_via_llm_api(self, user_text: str) -> dict:
-        scene_json = json.dumps(self.latest_scene_state)
-        user_message = f"Instruccion humana: {user_text}\n\nscene_state:\n{scene_json}"
+        system_prompt = self.load_system_prompt()
 
-        model = self.get_parameter("llm_model").value
         try:
-            response = self._anthropic_client.messages.create(
-                model=model,
-                max_tokens=512,
-                system=SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": user_message}],
+            result = self.backend.generate_plan(
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
             )
-            raw_text = "".join(
-                block.text for block in response.content if getattr(block, "type", None) == "text"
+
+            # Validar integridad basica del plan contra las reglas del sistema
+            plan_dict = json.loads(result.plan.model_dump_json())
+            valid, reason = plan_utils.validate_plan(plan_dict, self.current_scene)
+
+            if not valid:
+                self.get_logger().warn(f"Plan LLM rechazado por validacion ({reason}).")
+                self.publish_abort(f"validation_failed:{reason}")
+                return
+
+            output = String()
+            output.data = result.plan.model_dump_json()
+            self.plan_publisher.publish(output)
+
+            self.get_logger().info(
+                f"Plan publicado exitosamente en /llm_plan | "
+                f"model={result.model} latency={result.latency_s:.3f}s"
             )
-            return json.loads(raw_text)
-        except Exception as e:
-            self.get_logger().error(f"Error consultando la API del LLM: {e}")
-            return plan_utils.abort_plan("llm_api_error")
+
+        except Exception as exc:
+            self.get_logger().error(f"Error durante la inferencia LLM: {exc}")
+            self.publish_abort("llm_failure")
+
+    def _process_command_deterministic(self, command_text: str) -> None:
+        plan_dict = plan_utils.parse_user_command(command_text, self.default_place_zone)
+        valid, reason = plan_utils.validate_plan(plan_dict, self.current_scene)
+
+        if not valid:
+            self.get_logger().warn(f"Plan determinista rechazado ({reason}).")
+            self.publish_abort(reason)
+            return
+
+        output = String()
+        output.data = json.dumps(plan_dict)
+        self.plan_publisher.publish(output)
+        self.get_logger().info(f"Plan determinista publicado en /llm_plan: {output.data}")
+
+    def publish_abort(self, reason: str) -> None:
+        abort_plan = RobotPlan.create_abort(reason=reason)
+        output = String()
+        output.data = abort_plan.model_dump_json()
+        self.plan_publisher.publish(output)
+        self.get_logger().info(f"Abort publicado en /llm_plan: {reason}")
+
+    def load_system_prompt(self) -> str:
+        # 1. Si hay parametro prompt_file explicito
+        if self.prompt_file and os.path.isfile(self.prompt_file):
+            try:
+                with open(self.prompt_file, "r", encoding="utf-8") as f:
+                    return f.read()
+            except Exception as e:
+                self.get_logger().warn(f"No se pudo leer prompt_file '{self.prompt_file}': {e}")
+
+        # 2. Intentar buscar planner_prompt.txt en el paquete instalado o relativo
+        try:
+            from ament_index_python.packages import get_package_share_directory
+            pkg_share = get_package_share_directory("brazo_ai")
+            prompt_path = os.path.join(pkg_share, "config", "planner_prompt.txt")
+            if os.path.isfile(prompt_path):
+                with open(prompt_path, "r", encoding="utf-8") as f:
+                    return f.read()
+        except Exception:
+            pass
+
+        # 3. Intentar ruta de desarrollo local si existe
+        dev_prompt_path = os.path.join(
+            os.path.dirname(__file__), "..", "config", "planner_prompt.txt"
+        )
+        if os.path.isfile(dev_prompt_path):
+            try:
+                with open(dev_prompt_path, "r", encoding="utf-8") as f:
+                    return f.read()
+            except Exception:
+                pass
+
+        # 4. Fallback por defecto
+        return FALLBACK_SYSTEM_PROMPT
 
 
-def main(args=None):
+# Alias para retrocompatibilidad
+LLMAgentNode = LlmAgentNode
+
+
+def main(args=None) -> None:
     rclpy.init(args=args)
     node = LlmAgentNode()
+
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
         pass
-    node.destroy_node()
-    rclpy.shutdown()
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
 
 
 if __name__ == "__main__":

@@ -1,7 +1,10 @@
 from dataclasses import dataclass
 from time import perf_counter
 
-from ollama import Client
+try:
+    from ollama import Client
+except ImportError:
+    Client = None
 
 from .plan_schema import RobotPlan
 
@@ -22,8 +25,13 @@ class OllamaBackend:
         host: str = "http://localhost:11434",
         timeout_s: float = 30.0,
     ) -> None:
+        if Client is None:
+            raise ImportError(
+                "El paquete 'ollama' no esta instalado en Python. Instalalo usando 'pip install ollama'."
+            )
         self.model = model
         self.client = Client(host=host, timeout=timeout_s)
+
 
     def generate_plan(
         self,

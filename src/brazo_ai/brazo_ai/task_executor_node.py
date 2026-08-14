@@ -158,11 +158,11 @@ class TaskExecutorNode(Node):
             self._run_gripper_only(False)
             return
 
-        if task == "go_home":
+        if task in ("go_home", "home"):
             self._run_go_home()
             return
 
-        if task in ("pick_object", "pick_and_place"):
+        if task in ("pick", "pick_object", "pick_and_place"):
             self._run_pick(plan, do_place=(task == "pick_and_place"))
             return
 
@@ -172,10 +172,10 @@ class TaskExecutorNode(Node):
     # Primitivas
     # ------------------------------------------------------------------
 
-    def _select_object(self, class_name):
+    def _select_object(self, class_name_or_id):
         candidates = [
             o for o in self.latest_objects_base
-            if o.class_name == class_name and o.reachable
+            if (o.class_name == class_name_or_id or o.object_id == class_name_or_id) and o.reachable
         ]
         if not candidates:
             return None
@@ -288,7 +288,17 @@ class TaskExecutorNode(Node):
     def _run_pick(self, plan, do_place: bool):
         self.publish_status("SELECT_OBJECT", True, False, "selecting object")
         obj_info = plan.get("object", {})
-        class_name = obj_info.get("class_name")
+        class_name = (
+            plan.get("target_object_id")
+            or (obj_info.get("class_name") if isinstance(obj_info, dict) else None)
+        )
+        if not class_name:
+            steps = plan.get("steps", [])
+            for step in steps:
+                if step.get("object_id"):
+                    class_name = step.get("object_id")
+                    break
+
         if not class_name:
             self.publish_status("ABORTED", False, False, "missing_class_name")
             return
@@ -329,11 +339,23 @@ class TaskExecutorNode(Node):
             self.publish_status("DONE", False, True, "pick_object_done")
             return
 
-        place_zone = plan.get("place_zone") or self.get_parameter("default_place_zone").value
+        place_zone = (
+            plan.get("destination_zone_id")
+            or plan.get("place_zone")
+            or self.get_parameter("default_place_zone").value
+        )
+        if not place_zone:
+            steps = plan.get("steps", [])
+            for step in steps:
+                if step.get("zone_id"):
+                    place_zone = step.get("zone_id")
+                    break
+
         place = self._zone_point(place_zone)
         if place is None:
             self.publish_status("ABORTED", False, False, "place_zone_not_in_scene_state")
             return
+
 
         if not self._send_target(*place, "MOVE_TO_PLACE_ZONE"):
             self.publish_status("ABORTED", False, False, "safety_guard_rejected")

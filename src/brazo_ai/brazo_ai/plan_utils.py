@@ -9,10 +9,12 @@ import json
 
 ALLOWED_TASKS = [
     "observe_scene",
+    "pick",
     "pick_object",
     "pick_and_place",
     "open_gripper",
     "close_gripper",
+    "home",
     "go_home",
     "abort",
 ]
@@ -96,11 +98,12 @@ def parse_user_command(text: str, default_place_zone: str) -> dict:
     return abort_plan("command_not_understood")
 
 
-def find_reachable_object(scene_state: dict, class_name: str):
+def find_reachable_object(scene_state: dict, class_name_or_id: str):
     objects = scene_state.get("objects", []) if scene_state else []
     candidates = [
         o for o in objects
-        if o.get("class") == class_name and o.get("reachable") is True
+        if (o.get("class") == class_name_or_id or o.get("id") == class_name_or_id)
+        and o.get("reachable") is True
     ]
     if not candidates:
         return None
@@ -128,31 +131,51 @@ def validate_plan(plan: dict, scene_state: dict):
     if task == "abort":
         return True, "ok"
 
-    if task in ("pick_object", "pick_and_place"):
-        obj = plan.get("object", {})
-        if not isinstance(obj, dict) or "class_name" not in obj:
+    if task in ("pick", "pick_object", "pick_and_place"):
+        target_obj = plan.get("target_object_id")
+        obj_dict = plan.get("object", {})
+        class_name = target_obj or (obj_dict.get("class_name") if isinstance(obj_dict, dict) else None)
+
+        if not class_name and scene_state:
+            # Si hay steps en RobotPlan, buscar target en los steps
+            steps = plan.get("steps", [])
+            for step in steps:
+                if step.get("object_id"):
+                    class_name = step.get("object_id")
+                    break
+
+        if not class_name:
             return False, "missing_object_class_name"
 
-        class_name = obj["class_name"]
-        scene_classes = {o.get("class") for o in scene_state.get("objects", [])} if scene_state else set()
-        if class_name not in scene_classes:
-            return False, "object_class_not_in_scene"
+        if scene_state:
+            scene_objects = scene_state.get("objects", [])
+            scene_classes_and_ids = {o.get("class") for o in scene_objects} | {o.get("id") for o in scene_objects}
+            if class_name not in scene_classes_and_ids:
+                return False, "object_class_not_in_scene"
 
-        target = find_reachable_object(scene_state, class_name)
-        if target is None:
-            return False, "no_reachable_object"
+            target = find_reachable_object(scene_state, class_name)
+            if target is None:
+                return False, "no_reachable_object"
 
         if task == "pick_and_place":
-            place_zone = plan.get("place_zone")
-            zones = scene_state.get("zones", {}) if scene_state else {}
-            if place_zone not in zones:
-                return False, "place_zone_not_in_scene"
+            place_zone = plan.get("destination_zone_id") or plan.get("place_zone")
+            if not place_zone and scene_state:
+                steps = plan.get("steps", [])
+                for step in steps:
+                    if step.get("zone_id"):
+                        place_zone = step.get("zone_id")
+                        break
+            if scene_state and place_zone:
+                zones = scene_state.get("zones", {})
+                if place_zone not in zones:
+                    return False, "place_zone_not_in_scene"
 
     if scene_state and scene_state.get("robot", {}).get("busy"):
         if task not in ("abort", "observe_scene"):
             return False, "robot_busy"
 
     return True, "ok"
+
 
 
 def plan_to_json(plan: dict) -> str:

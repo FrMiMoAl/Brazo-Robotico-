@@ -65,9 +65,12 @@ def generate_launch_description():
         # manual_plan_node (solo pruebas por parametro 'task' / topico) ---
         DeclareLaunchArgument("use_llm_agent", default_value="true",
                                description="true: lanza llm_agent_node. false: lanza manual_plan_node."),
-        DeclareLaunchArgument("use_llm_api", default_value="false",
-                               description="Solo aplica si use_llm_agent=true. Requiere ANTHROPIC_API_KEY en el entorno."),
-        DeclareLaunchArgument("llm_model", default_value="claude-sonnet-5"),
+        DeclareLaunchArgument("use_llm_api", default_value="true",
+                               description="Solo aplica si use_llm_agent=true. Conecta a OllamaBackend."),
+        DeclareLaunchArgument("model", default_value="qwen3:4b-instruct",
+                               description="Modelo Ollama a utilizar para planificacion simbolica."),
+        DeclareLaunchArgument("ollama_host", default_value="http://localhost:11434",
+                               description="Host y puerto del servidor Ollama."),
         DeclareLaunchArgument("manual_task", default_value="",
                                description="Solo aplica si use_llm_agent=false. Ej: pick_red, go_home, open_gripper."),
         DeclareLaunchArgument("default_place_zone", default_value="drop_zone_a"),
@@ -134,7 +137,8 @@ def generate_launch_description():
         condition=IfCondition(LaunchConfiguration("use_llm_agent")),
         parameters=[{
             "use_llm_api": LaunchConfiguration("use_llm_api"),
-            "llm_model": LaunchConfiguration("llm_model"),
+            "model": LaunchConfiguration("model"),
+            "ollama_host": LaunchConfiguration("ollama_host"),
             "default_place_zone": LaunchConfiguration("default_place_zone"),
         }],
     )

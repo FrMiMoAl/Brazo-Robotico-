@@ -29,7 +29,7 @@ class PlanStep(BaseModel):
 class RobotPlan(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: Literal["1.0"]
+    schema_version: Literal["1.0"] = "1.0"
     task: Literal[
         "pick",
         "pick_and_place",
@@ -42,3 +42,23 @@ class RobotPlan(BaseModel):
         min_length=1,
         max_length=8,
     )
+    reason: str | None = None
+
+    @classmethod
+    def create_abort(cls, reason: str = "unknown_reason") -> "RobotPlan":
+        return cls(
+            schema_version="1.0",
+            task="abort",
+            target_object_id=None,
+            destination_zone_id=None,
+            steps=[
+                PlanStep(
+                    action=ActionName.ABORT,
+                    object_id=None,
+                    zone_id=None,
+                    height_m=None,
+                )
+            ],
+            reason=reason,
+        )
+
