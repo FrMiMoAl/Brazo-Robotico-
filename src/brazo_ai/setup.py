@@ -39,6 +39,7 @@ setup(
             'tag_calibrator = brazo_ai.tag_calibrator:main',
             'red_to_base_printer = brazo_ai.red_to_base_printer:main',
             'experimental_logger = brazo_ai.experimental_logger_node:main',
+            'benchmark_runner = brazo_ai.benchmark_runner:main',
         ],
     },
 )

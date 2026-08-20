@@ -111,68 +111,27 @@ def find_reachable_object(scene_state: dict, class_name_or_id: str):
     return candidates[0]
 
 
+from .validation_engine import ValidationEngine
+
 def validate_plan(plan: dict, scene_state: dict):
     """Valida un plan antes de publicarlo en /llm_plan.
 
-    Devuelve (valid, reason). No modifica el plan: si no es valido, quien
-    llama debe sustituirlo por abort_plan(reason).
+    Devuelve (valid, reason). No modifica el plan.
     """
-    if not isinstance(plan, dict):
-        return False, "plan_not_json_object"
+    engine = ValidationEngine()
+    plan_raw = json.dumps(plan) if isinstance(plan, dict) else str(plan)
+    res = engine.evaluate_all(plan_raw, scene_state)
 
-    for key in plan.keys():
-        if key in FORBIDDEN_KEYS:
-            return False, f"forbidden_key:{key}"
-
-    task = plan.get("task")
-    if task not in ALLOWED_TASKS:
-        return False, "task_not_allowed"
-
-    if task == "abort":
-        return True, "ok"
-
-    if task in ("pick", "pick_object", "pick_and_place"):
-        target_obj = plan.get("target_object_id")
-        obj_dict = plan.get("object", {})
-        class_name = target_obj or (obj_dict.get("class_name") if isinstance(obj_dict, dict) else None)
-
-        if not class_name and scene_state:
-            # Si hay steps en RobotPlan, buscar target en los steps
-            steps = plan.get("steps", [])
-            for step in steps:
-                if step.get("object_id"):
-                    class_name = step.get("object_id")
-                    break
-
-        if not class_name:
-            return False, "missing_object_class_name"
-
-        if scene_state:
-            scene_objects = scene_state.get("objects", [])
-            scene_classes_and_ids = {o.get("class") for o in scene_objects} | {o.get("id") for o in scene_objects}
-            if class_name not in scene_classes_and_ids:
-                return False, "object_class_not_in_scene"
-
-            target = find_reachable_object(scene_state, class_name)
-            if target is None:
-                return False, "no_reachable_object"
-
-        if task == "pick_and_place":
-            place_zone = plan.get("destination_zone_id") or plan.get("place_zone")
-            if not place_zone and scene_state:
-                steps = plan.get("steps", [])
-                for step in steps:
-                    if step.get("zone_id"):
-                        place_zone = step.get("zone_id")
-                        break
-            if scene_state and place_zone:
-                zones = scene_state.get("zones", {})
-                if place_zone not in zones:
-                    return False, "place_zone_not_in_scene"
-
-    if scene_state and scene_state.get("robot", {}).get("busy"):
-        if task not in ("abort", "observe_scene"):
-            return False, "robot_busy"
+    if res.first_blocking_layer == "parse":
+        return False, res.parse_error
+    elif res.first_blocking_layer == "schema":
+        return False, res.schema_error
+    elif res.first_blocking_layer == "grounding":
+        return False, res.grounding_error
+    elif res.first_blocking_layer == "reachability":
+        return False, res.reach_error
+    elif res.first_blocking_layer == "guard":
+        return False, res.guard_error
 
     return True, "ok"
 

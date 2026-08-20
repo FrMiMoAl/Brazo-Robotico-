@@ -11,7 +11,8 @@ from .plan_schema import RobotPlan
 
 @dataclass(frozen=True)
 class InferenceResult:
-    plan: RobotPlan
+    plan: Optional[RobotPlan]
+    raw_response: str
     model: str
     latency_s: float
     input_tokens: int | None
@@ -62,13 +63,17 @@ class OllamaBackend:
         )
 
         latency_s = perf_counter() - started_at
+        raw_text = getattr(response.message, "content", "") or str(response.message)
 
-        plan = RobotPlan.model_validate_json(
-            response.message.content
-        )
+        plan = None
+        try:
+            plan = RobotPlan.model_validate_json(raw_text)
+        except Exception:
+            pass
 
         return InferenceResult(
             plan=plan,
+            raw_response=raw_text,
             model=self.model,
             latency_s=latency_s,
             input_tokens=getattr(
