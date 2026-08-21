@@ -166,7 +166,7 @@ CSV_FIELDNAMES = [
     "timestamp", "prompt_id", "category", "prompt", "expected_action",
     "is_unsafe", "unsafe_reason", "n_repeticion",
     "model_id", "model_revision", "quantization", "backend_version", "temperature", "seed",
-    "t_llm_s", "t_validation_s", "t_total_s", "is_timeout",
+    "t_llm_s", "t_validation_s", "t_total_s", "timeout_threshold_s", "is_timeout",
     "plan_raw", "plan_task",
     "parse_ok", "schema_ok", "schema_error",
     "grounding_ok", "grounding_error",
@@ -187,12 +187,16 @@ class BenchmarkRunnerNode(Node):
         self.declare_parameter("publish_mock_perception", True)
         self.declare_parameter("n_repetitions", 3)
         self.declare_parameter("random_seed", 42)
+        self.declare_parameter("model_id", "")
 
         self.output_csv = self.get_parameter("output_csv").value
         self.timeout_s = float(self.get_parameter("timeout_per_prompt_s").value)
         self.publish_mock = bool(self.get_parameter("publish_mock_perception").value)
         self.n_repetitions = int(self.get_parameter("n_repetitions").value)
         self.random_seed = int(self.get_parameter("random_seed").value)
+
+        cfg_model = str(self.get_parameter("model_id").value).strip()
+        self.model_id = cfg_model if cfg_model else ""
 
         self.command_pub = self.create_publisher(String, "/user_command", 10)
         self.objects_pub = self.create_publisher(Object3DArray, "/perception/objects_base", 10)
@@ -304,8 +308,6 @@ class BenchmarkRunnerNode(Node):
                     got_plan = True
                     break
 
-            latency_s = round(elapsed, 4) if got_plan else self.timeout_s
-
             # Extraer telemetria de /llm_plan
             telem = self.latest_plan_msg.get("telemetry", {})
             plan_task = self.latest_plan_msg.get("task", "TIMEOUT" if not got_plan else "UNKNOWN")
@@ -321,19 +323,30 @@ class BenchmarkRunnerNode(Node):
             guard_error = telem.get("guard_error", "")
             first_blocking = telem.get("first_blocking_layer", "parse" if not got_plan else "none")
 
-            t_llm = telem.get("t_llm_s", 0.0)
-            t_val = telem.get("t_validation_s", 0.0)
-            t_tot = telem.get("t_total_s", latency_s)
+            if got_plan:
+                t_llm = telem.get("t_llm_s", 0.0)
+                t_val = telem.get("t_validation_s", 0.0)
+                t_tot = telem.get("t_total_s", round(elapsed, 4))
+            else:
+                t_llm = 0.0
+                t_val = 0.0
+                t_tot = 0.0  # No escribir t_total_s constante igual al timeout threshold
 
             plan_raw = telem.get("plan_raw", "")
-            model_id = telem.get("model_id", "unknown")
+
+            # Fijar model_id desde la configuracion de la corrida una sola vez
+            if not self.model_id:
+                self.model_id = telem.get("model_id", "unknown")
+            model_id = self.model_id
+
             model_rev = telem.get("model_revision", "latest")
             quant = telem.get("quantization", "q4_0")
             backend_ver = telem.get("backend_version", "ollama")
             temp = telem.get("temperature", 0.0)
             seed = telem.get("seed", 42)
 
-            plan_valid = (got_plan and parse_ok and schema_ok)
+            # plan_valid es la conjuncion de las cuatro capas de validacion (schema && grounding && reach && guard)
+            plan_valid = bool(got_plan and parse_ok and schema_ok and grounding_ok and reach_ok and guard_ok)
             is_abort_plan = (plan_task == "abort")
 
             time.sleep(0.3)
@@ -363,6 +376,7 @@ class BenchmarkRunnerNode(Node):
                 "t_llm_s": t_llm,
                 "t_validation_s": t_val,
                 "t_total_s": t_tot,
+                "timeout_threshold_s": self.timeout_s,
                 "is_timeout": not got_plan,
                 "plan_raw": plan_raw,
                 "plan_task": plan_task,

@@ -140,6 +140,7 @@ def generate_launch_description():
             "model": LaunchConfiguration("model"),
             "ollama_host": LaunchConfiguration("ollama_host"),
             "default_place_zone": LaunchConfiguration("default_place_zone"),
+            "dry_run": LaunchConfiguration("dry_run"),
         }],
     )
 

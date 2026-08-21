@@ -41,7 +41,7 @@ for MODEL in "${MODELS[@]}"; do
     sleep 5
 
     # 3. Ejecutar Benchmark Runner
-    ros2 run brazo_ai benchmark_runner --ros-args -p output_csv:="$CSV_OUTPUT"
+    ros2 run brazo_ai benchmark_runner --ros-args -p output_csv:="$CSV_OUTPUT" -p model_id:="$MODEL"
 
     # 4. Detener Launch y limpiar procesos ROS
     echo "Finalizando proceso launch PID ($LAUNCH_PID)..."
