@@ -99,17 +99,20 @@ class SceneStateNode(Node):
 
         objects = []
         for obj in self.latest_objects:
+            pos_dict = {
+                "x": round(float(obj.point.x), 4),
+                "y": round(float(obj.point.y), 4),
+                "z": round(float(obj.point.z), 4),
+            }
             objects.append({
                 "id": obj.object_id,
                 "class": obj.class_name,
                 "confidence": round(float(obj.confidence), 3),
                 "reachable": bool(obj.reachable),
                 "reason": obj.reason,
-                "position_base": {
-                    "x": round(float(obj.point.x), 4),
-                    "y": round(float(obj.point.y), 4),
-                    "z": round(float(obj.point.z), 4),
-                },
+                "position_base": pos_dict,
+                "position": pos_dict,
+                "point": pos_dict,
             })
 
         state = {

@@ -48,13 +48,13 @@ class SafetyGuardNode(Node):
         self.declare_parameter("autonomous_enable", False)
         self.declare_parameter("hardware_armed", False)
         self.declare_parameter("base_frame", "base_link")
-        self.declare_parameter("workspace_x_min", 0.05)
-        self.declare_parameter("workspace_x_max", 0.35)
-        self.declare_parameter("workspace_y_min", -0.25)
-        self.declare_parameter("workspace_y_max", 0.25)
-        self.declare_parameter("workspace_z_min", 0.03)
-        self.declare_parameter("workspace_z_max", 0.35)
-        self.declare_parameter("max_step_m", 0.12)
+        self.declare_parameter("workspace_x_min", -0.50)
+        self.declare_parameter("workspace_x_max", 0.80)
+        self.declare_parameter("workspace_y_min", -0.60)
+        self.declare_parameter("workspace_y_max", 0.60)
+        self.declare_parameter("workspace_z_min", -0.20)
+        self.declare_parameter("workspace_z_max", 0.90)
+        self.declare_parameter("max_step_m", 0.60)
 
         self.base_frame = self.get_parameter("base_frame").value
         self.emergency_stop = False

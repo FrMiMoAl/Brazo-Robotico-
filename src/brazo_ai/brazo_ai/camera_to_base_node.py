@@ -34,14 +34,14 @@ class CameraToBaseNode(Node):
         super().__init__("camera_to_base_node")
 
         self.declare_parameter("base_frame", "base_link")
-        self.declare_parameter("camera_frame", "kinect2_depth_optical_frame")
-        self.declare_parameter("workspace_x_min", 0.05)
-        self.declare_parameter("workspace_x_max", 0.35)
-        self.declare_parameter("workspace_y_min", -0.25)
-        self.declare_parameter("workspace_y_max", 0.25)
-        self.declare_parameter("workspace_z_min", 0.02)
-        self.declare_parameter("workspace_z_max", 0.35)
-        self.declare_parameter("object_stale_timeout", 0.75)
+        self.declare_parameter("camera_frame", "kinect1_color_optical_frame")
+        self.declare_parameter("workspace_x_min", -0.50)
+        self.declare_parameter("workspace_x_max", 0.80)
+        self.declare_parameter("workspace_y_min", -0.60)
+        self.declare_parameter("workspace_y_max", 0.60)
+        self.declare_parameter("workspace_z_min", -0.20)
+        self.declare_parameter("workspace_z_max", 0.90)
+        self.declare_parameter("object_stale_timeout", 5.0)
 
         self.base_frame = self.get_parameter("base_frame").value
         self.camera_frame = self.get_parameter("camera_frame").value

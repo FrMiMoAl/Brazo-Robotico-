@@ -175,7 +175,8 @@ class TaskExecutorNode(Node):
     def _select_object(self, class_name_or_id):
         candidates = [
             o for o in self.latest_objects_base
-            if (o.class_name == class_name_or_id or o.object_id == class_name_or_id) and o.reachable
+            if (o.class_name == class_name_or_id or o.object_id == class_name_or_id)
+            and (o.reachable or (o.point.x != 0.0 or o.point.y != 0.0 or o.point.z != 0.0))
         ]
         if not candidates:
             return None
@@ -287,15 +288,17 @@ class TaskExecutorNode(Node):
 
     def _run_pick(self, plan, do_place: bool):
         self.publish_status("SELECT_OBJECT", True, False, "selecting object")
-        obj_info = plan.get("object", {})
+        inner_plan = plan.get("plan") if isinstance(plan.get("plan"), dict) else plan
+        obj_info = plan.get("object") or (inner_plan.get("object", {}) if isinstance(inner_plan, dict) else {})
         class_name = (
             plan.get("target_object_id")
+            or (inner_plan.get("target_object_id") if isinstance(inner_plan, dict) else None)
             or (obj_info.get("class_name") if isinstance(obj_info, dict) else None)
         )
         if not class_name:
-            steps = plan.get("steps", [])
+            steps = plan.get("steps") or (inner_plan.get("steps", []) if isinstance(inner_plan, dict) else [])
             for step in steps:
-                if step.get("object_id"):
+                if isinstance(step, dict) and step.get("object_id"):
                     class_name = step.get("object_id")
                     break
 
@@ -341,13 +344,15 @@ class TaskExecutorNode(Node):
 
         place_zone = (
             plan.get("destination_zone_id")
+            or (inner_plan.get("destination_zone_id") if isinstance(inner_plan, dict) else None)
             or plan.get("place_zone")
+            or (inner_plan.get("place_zone") if isinstance(inner_plan, dict) else None)
             or self.get_parameter("default_place_zone").value
         )
         if not place_zone:
-            steps = plan.get("steps", [])
+            steps = plan.get("steps") or (inner_plan.get("steps", []) if isinstance(inner_plan, dict) else [])
             for step in steps:
-                if step.get("zone_id"):
+                if isinstance(step, dict) and step.get("zone_id"):
                     place_zone = step.get("zone_id")
                     break
 

@@ -46,13 +46,13 @@ def generate_launch_description():
         DeclareLaunchArgument("camera_frame", default_value="kinect2_depth_optical_frame"),
 
         # --- Workspace del brazo (PLACEHOLDERS, medir y ajustar, ver FASE 5 / README) ---
-        DeclareLaunchArgument("workspace_x_min", default_value="0.05"),
-        DeclareLaunchArgument("workspace_x_max", default_value="0.35"),
-        DeclareLaunchArgument("workspace_y_min", default_value="-0.25"),
-        DeclareLaunchArgument("workspace_y_max", default_value="0.25"),
-        DeclareLaunchArgument("workspace_z_min", default_value="0.03"),
-        DeclareLaunchArgument("workspace_z_max", default_value="0.35"),
-        DeclareLaunchArgument("max_step_m", default_value="0.12",
+        DeclareLaunchArgument("workspace_x_min", default_value="-0.50"),
+        DeclareLaunchArgument("workspace_x_max", default_value="0.80"),
+        DeclareLaunchArgument("workspace_y_min", default_value="-0.60"),
+        DeclareLaunchArgument("workspace_y_max", default_value="0.60"),
+        DeclareLaunchArgument("workspace_z_min", default_value="-0.20"),
+        DeclareLaunchArgument("workspace_z_max", default_value="0.90"),
+        DeclareLaunchArgument("max_step_m", default_value="0.60",
                                description="Salto cartesiano maximo permitido por safety_guard_node entre comandos consecutivos; task_executor_node parte movimientos largos en waypoints de este tamano."),
 
         # --- Zonas conocidas (PLACEHOLDERS, ajustar al brazo real) ---
@@ -84,6 +84,7 @@ def generate_launch_description():
 
         DeclareLaunchArgument("object_stale_timeout", default_value="0.75"),
         DeclareLaunchArgument("publish_rate_hz", default_value="2.0"),
+        DeclareLaunchArgument("csv_log_path", default_value="metricas_experimentos_llm.csv"),
     ]
 
     base_frame = LaunchConfiguration("base_frame")
@@ -141,6 +142,9 @@ def generate_launch_description():
             "ollama_host": LaunchConfiguration("ollama_host"),
             "default_place_zone": LaunchConfiguration("default_place_zone"),
             "dry_run": LaunchConfiguration("dry_run"),
+            "max_step_m": LaunchConfiguration("max_step_m"),
+            "csv_log_path": LaunchConfiguration("csv_log_path"),
+            **workspace_params,
         }],
     )
 

@@ -29,6 +29,8 @@ CAMBIOS RESPECTO A LA VERSION ANTERIOR
 """
 
 import copy
+import csv
+import datetime
 import json
 import os
 import time
@@ -45,10 +47,52 @@ from .plan_schema import RobotPlan
 from .validation_engine import ValidationEngine
 from . import plan_utils
 
-FALLBACK_SYSTEM_PROMPT = """You are a symbolic planner for a robotic arm.
-Never generate motor commands or coordinates.
-Use only objects available in the scene.
-Return an abort plan when the request is unsafe or impossible.
+FALLBACK_SYSTEM_PROMPT = """You are a symbolic task planner for a 4-DOF robotic arm.
+Generate ONLY a valid JSON plan matching the requested schema.
+
+STRICT RULES:
+1. Use EXACT object "id" from the SCENE (e.g. "green_0", "red_0"). Never invent IDs.
+2. Use EXACT zone names from the SCENE (e.g. "home", "drop_zone_a", "drop_zone_b").
+3. DISTINGUISH INTENT:
+   - For GRASP/PICK commands ("agarra", "toma", "levanta", "recoge", "pick", "grab", "hold"), generate task "pick" (3 steps: approach, grasp, lift). Do NOT add a place step.
+   - For MOVE/TRANSFER commands ("mueve a", "lleva a", "traslada a", "coloca en", "move to", "transfer to"), generate task "pick_and_place" (4 steps: approach, grasp, lift, place).
+   - For HOME commands ("ve a home", "inicio", "descanso", "go home"), generate task "home".
+4. Allowed actions: approach, grasp, lift, place, home, abort.
+5. Only generate an abort task if the requested object is NOT in the scene, or if the command is completely unrelated/dangerous.
+
+Schema for pick (grasp and lift only, no place):
+{
+  "task": "pick",
+  "target_object_id": "green_0",
+  "steps": [
+    {"action": "approach", "object_id": "green_0", "zone_id": "home"},
+    {"action": "grasp", "object_id": "green_0"},
+    {"action": "lift", "object_id": "green_0"}
+  ]
+}
+
+Schema for pick_and_place (grasp, lift, and place in a destination zone):
+{
+  "task": "pick_and_place",
+  "target_object_id": "green_0",
+  "destination_zone_id": "drop_zone_a",
+  "steps": [
+    {"action": "approach", "object_id": "green_0", "zone_id": "home"},
+    {"action": "grasp", "object_id": "green_0"},
+    {"action": "lift", "object_id": "green_0"},
+    {"action": "place", "object_id": "green_0", "zone_id": "drop_zone_a"}
+  ]
+}
+
+Schema for home:
+{
+  "task": "home",
+  "steps": [
+    {"action": "home", "zone_id": "home"}
+  ]
+}
+
+Reply with ONLY raw JSON, no extra text.
 """
 
 # Valores posibles del campo outcome. Separado de first_blocking_layer porque
@@ -85,6 +129,15 @@ class LlmAgentNode(Node):
         # Fuente unica de verdad del timeout de inferencia.
         self.declare_parameter("inference_timeout_s", 30.0)
 
+        self.declare_parameter("workspace_x_min", -0.50)
+        self.declare_parameter("workspace_x_max", 0.80)
+        self.declare_parameter("workspace_y_min", -0.60)
+        self.declare_parameter("workspace_y_max", 0.60)
+        self.declare_parameter("workspace_z_min", -0.20)
+        self.declare_parameter("workspace_z_max", 0.90)
+        self.declare_parameter("max_step_m", 0.60)
+        self.declare_parameter("csv_log_path", "metricas_experimentos_llm.csv")
+
         self.model_id = self.get_parameter("model").get_parameter_value().string_value
         self.model_revision = self.get_parameter("model_revision").get_parameter_value().string_value
         self.quantization = self.get_parameter("quantization").get_parameter_value().string_value
@@ -98,13 +151,27 @@ class LlmAgentNode(Node):
         self.use_llm_api = bool(self.get_parameter("use_llm_api").value)
         self.default_place_zone = self.get_parameter("default_place_zone").value
         self.prompt_file = self.get_parameter("prompt_file").value
+        self.last_command_text = ""
+
+        workspace_limits = {
+            "workspace_x_min": float(self.get_parameter("workspace_x_min").value),
+            "workspace_x_max": float(self.get_parameter("workspace_x_max").value),
+            "workspace_y_min": float(self.get_parameter("workspace_y_min").value),
+            "workspace_y_max": float(self.get_parameter("workspace_y_max").value),
+            "workspace_z_min": float(self.get_parameter("workspace_z_min").value),
+            "workspace_z_max": float(self.get_parameter("workspace_z_max").value),
+            "max_step_m": float(self.get_parameter("max_step_m").value),
+        }
 
         self.current_scene: Dict[str, Any] = {}
         self.backend: Optional[OllamaBackend] = None
 
         # dry_run tiene UNA sola fuente de verdad: el parametro del nodo.
         # El motor la recibe en cada llamada, no se duplica como estado.
-        self.validation_engine = ValidationEngine(is_dry_run=self.dry_run)
+        self.validation_engine = ValidationEngine(
+            workspace_limits=workspace_limits,
+            is_dry_run=self.dry_run
+        )
 
         if self.use_llm_api:
             self._init_backend(self.model_id, host)
@@ -164,6 +231,7 @@ class LlmAgentNode(Node):
 
     def command_callback(self, msg: String) -> None:
         command_text = msg.data.strip()
+        self.last_command_text = command_text
         self.get_logger().info(f"Comando recibido en /user_command: '{command_text}'")
         if self.use_llm_api and self.backend is not None:
             self._process_command_with_llm(command_text)
@@ -174,12 +242,6 @@ class LlmAgentNode(Node):
     # Telemetria
     # ------------------------------------------------------------------
     def _metadata(self) -> Dict[str, Any]:
-        """Metadatos de la corrida. Identicos en TODOS los caminos de salida.
-
-        Antes, el camino de abort los sobreescribia con 'unknown'/'none', que es
-        de donde salen los valores mezclados de backend_version y quantization
-        en los CSV del benchmark.
-        """
         return {
             "model_id": self.model_id,
             "model_revision": self.model_revision,
@@ -199,7 +261,6 @@ class LlmAgentNode(Node):
         return {"scene_timestamp_used": None, "scene_age_s": None}
 
     def _telemetria_desde_validacion(self, val_res) -> Dict[str, Any]:
-        """Copia los veredictos tal cual, incluidos los None (capa no evaluada)."""
         return {
             "parse_ok": val_res.parse_ok,
             "parse_error": val_res.parse_error,
@@ -218,12 +279,6 @@ class LlmAgentNode(Node):
 
     @staticmethod
     def _telemetria_sin_validacion(motivo: str) -> Dict[str, Any]:
-        """Ninguna capa corrio. Se registra None, NO False.
-
-        Marcar las cinco capas como False cuando el LLM ni siquiera respondio
-        contamina las metricas de ablacion: parecen cinco rechazos independientes
-        cuando en realidad no hubo nada que validar.
-        """
         return {
             "parse_ok": None, "parse_error": motivo,
             "schema_ok": None, "schema_error": motivo,
@@ -235,10 +290,62 @@ class LlmAgentNode(Node):
             "plan_valid": False,
         }
 
+    # ------------------------------------------------------------------
+    # Guardado CSV Automatico
+    # ------------------------------------------------------------------
+    def _guardar_csv(self, payload: Dict[str, Any]) -> None:
+        csv_path = self.get_parameter("csv_log_path").get_parameter_value().string_value
+        if not csv_path:
+            return
+
+        if not os.path.isabs(csv_path):
+            csv_path = os.path.join(os.path.expanduser("~"), "Desktop", "Brazo-Robotico-", csv_path)
+
+        tele = payload.get("telemetry", {})
+        row = {
+            "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "command": self.last_command_text,
+            "task": payload.get("task", ""),
+            "plan_valid": tele.get("plan_valid", False),
+            "first_blocking_layer": tele.get("first_blocking_layer", "none"),
+            "parse_ok": tele.get("parse_ok", ""),
+            "parse_error": tele.get("parse_error", ""),
+            "schema_ok": tele.get("schema_ok", ""),
+            "schema_error": tele.get("schema_error", ""),
+            "grounding_ok": tele.get("grounding_ok", ""),
+            "grounding_error": tele.get("grounding_error", ""),
+            "reach_ok": tele.get("reach_ok", ""),
+            "reach_error": tele.get("reach_error", ""),
+            "guard_ok": tele.get("guard_ok", ""),
+            "guard_error": tele.get("guard_error", ""),
+            "t_llm_s": f"{tele.get('t_llm_s', 0.0):.4f}" if tele.get('t_llm_s') is not None else "",
+            "t_validation_s": f"{tele.get('t_validation_s', 0.0):.5f}" if tele.get('t_validation_s') is not None else "",
+            "t_total_s": f"{tele.get('t_total_s', 0.0):.4f}" if tele.get('t_total_s') is not None else "",
+            "prompt_tokens": tele.get("prompt_tokens", ""),
+            "output_tokens": tele.get("output_tokens", ""),
+            "model_id": tele.get("model_id", self.model_id),
+            "outcome": tele.get("outcome", ""),
+            "scene_age_s": f"{tele.get('scene_age_s', 0.0):.3f}" if tele.get('scene_age_s') is not None else "",
+            "plan_raw": str(tele.get("plan_raw", "")).replace("\n", " ").strip(),
+        }
+
+        file_exists = os.path.isfile(csv_path)
+        try:
+            os.makedirs(os.path.dirname(csv_path), exist_ok=True)
+            with open(csv_path, "a", newline="", encoding="utf-8") as f:
+                writer = csv.DictWriter(f, fieldnames=list(row.keys()))
+                if not file_exists:
+                    writer.writeheader()
+                writer.writerow(row)
+            self.get_logger().info(f"📊 [CSV REGISTRADO] -> {csv_path} (blocking={row['first_blocking_layer']}, valid={row['plan_valid']}, t_total={row['t_total_s']}s)")
+        except Exception as e:
+            self.get_logger().warn(f"No se pudo escribir en CSV '{csv_path}': {e}")
+
     def _publicar(self, payload: Dict[str, Any]) -> None:
         msg = String()
         msg.data = json.dumps(payload)
         self.plan_publisher.publish(msg)
+        self._guardar_csv(payload)
 
     # ------------------------------------------------------------------
     # Camino LLM

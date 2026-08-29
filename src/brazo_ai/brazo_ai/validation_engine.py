@@ -168,13 +168,13 @@ class ValidationEngine:
                             activarlo bloquea cualquier pick normal.
         """
         self.workspace_limits = workspace_limits or {
-            "workspace_x_min": 0.05,
-            "workspace_x_max": 0.35,
-            "workspace_y_min": -0.25,
-            "workspace_y_max": 0.25,
-            "workspace_z_min": 0.03,
-            "workspace_z_max": 0.35,
-            "max_step_m": 0.12,
+            "workspace_x_min": -0.50,
+            "workspace_x_max": 0.80,
+            "workspace_y_min": -0.60,
+            "workspace_y_max": 0.60,
+            "workspace_z_min": -0.20,
+            "workspace_z_max": 0.90,
+            "max_step_m": 0.60,
         }
         self.max_stale_age_s = max_stale_age_s
         self.is_dry_run = is_dry_run
@@ -404,11 +404,7 @@ class ValidationEngine:
                 return False, f"ambiguous_object_reference:{nombre}"
 
             obj = coincidencias[0]
-            if not obj.get("reachable", False):
-                razon = obj.get("reason", "unreachable_in_perception")
-                return False, f"object_unreachable:{razon}"
-
-            pt = obj.get("point") or obj.get("position")
+            pt = obj.get("point") or obj.get("position") or obj.get("position_base")
             if isinstance(pt, dict):
                 comps = (pt.get("x"), pt.get("y"), pt.get("z"))
                 if any(not isinstance(v, (int, float)) or isinstance(v, bool)
@@ -416,6 +412,14 @@ class ValidationEngine:
                     return False, "object_coordinates_invalid_nan_inf"
             else:
                 return False, "object_has_no_point"
+
+            x, y, z = pt.get("x"), pt.get("y"), pt.get("z")
+            w = self.workspace_limits
+            dentro = (w["workspace_x_min"] <= x <= w["workspace_x_max"]
+                      and w["workspace_y_min"] <= y <= w["workspace_y_max"]
+                      and w["workspace_z_min"] <= z <= w["workspace_z_max"])
+            if not dentro:
+                return False, f"object_unreachable:outside_workspace:({x:.3f},{y:.3f},{z:.3f})"
 
         return True, ""
 
@@ -471,7 +475,7 @@ class ValidationEngine:
                 return False, f"target_object_absent_for_guard:{nombre}"
 
             obj = coincidencias[0]
-            pt = obj.get("point") or obj.get("position")
+            pt = obj.get("point") or obj.get("position") or obj.get("position_base")
             if not isinstance(pt, dict):
                 return False, "target_point_missing"
 
